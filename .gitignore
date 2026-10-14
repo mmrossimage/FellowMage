@@ -1,0 +1,11 @@
+# upstream / instalação original (não versionar aqui)
+mage-src/
+Xmage/
+
+# build
+target/
+node_modules/
+dist/
+
+# logs
+*.log

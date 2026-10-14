@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* tamanhos de carta responsivos: tudo na mesa deriva destas variáveis */
+  --card-w: clamp(50px, min(5.4vw, 8.2vh), 116px);
+  --hand-w: clamp(84px, min(8.6vw, 15vh), 170px);
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  /* clip (e não hidden): impede que o navegador role a página ao focar algo fora da área */
+  overflow: clip;
+}
+
+body {
+  @apply bg-ink-950 font-sans text-white antialiased;
+  background:
+    radial-gradient(1200px 700px at 50% -10%, rgba(40, 184, 230, 0.12), transparent 60%),
+    radial-gradient(900px 600px at 50% 120%, rgba(245, 154, 27, 0.1), transparent 60%),
+    #05070d;
+}
+
+/* Mesa: "tapete" com anel dourado e vinheta, no espírito do Arena/Phase */
+.table-bg {
+  background:
+    radial-gradient(ellipse 46% 30% at 50% 52%, transparent 96%, rgba(255, 209, 138, 0.18) 97%, transparent 99%),
+    radial-gradient(ellipse 60% 45% at 50% 52%, rgba(255, 209, 138, 0.06), transparent 70%),
+    radial-gradient(ellipse 120% 90% at 50% 50%, transparent 55%, rgba(0, 0, 0, 0.75)),
+    conic-gradient(from 200deg at 50% 50%, #0d1424, #141b2e, #0f1626, #0b1120, #0d1424),
+    #0a0e18;
+}
+
+@layer components {
+  .input {
+    @apply w-full rounded-lg bg-black/40 px-3 py-2 text-sm text-white outline-none ring-1 ring-white/10 transition placeholder:text-white/30 focus:ring-arcane-400;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+}
