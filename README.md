@@ -60,5 +60,8 @@ Notas do protocolo XMage descobertas no caminho:
 Reconexão: se o navegador cair ou a página for recarregada, o gateway mantém a sessão XMage por 2 min; o cliente
 reconecta sozinho e recebe de volta a mesa, o pedido pendente e o histórico.
 
-Ainda não: editor de decks, multiplayer humano/lobby de mesas, draft/torneios, setas de alvo, arrastar cartas,
-sons, configurações.
+Editor de decks: busca no catálogo de cartas implementadas no XMage (lido do banco do servidor, só leitura),
+filtros de Commander, validação (100 cartas, singleton, identidade de cor), troca de arte, importar/exportar
+listas (Moxfield, Archidekt, Arena/MTGO, .dck). Os decks ficam em `decks/` no formato `.dck` do XMage.
+
+Ainda não: multiplayer humano/lobby de mesas, draft/torneios, sons, configurações.
