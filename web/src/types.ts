@@ -41,6 +41,69 @@ export type CommanderInfo = {
   damage: Record<string, number>;
 };
 
+/** Carta do catálogo do XMage (editor de decks). */
+export type CatalogCard = {
+  name: string;
+  set?: string;
+  num?: string;
+  cost: string;
+  mv: number;
+  type: string;
+  types: string[];
+  supertypes?: string[];
+  colors: string[];
+  identity: string[];
+  rarity?: string;
+  power?: string;
+  toughness?: string;
+  loyalty?: string;
+  rules: string[];
+  canBeCommander?: boolean;
+  basic?: boolean;
+  printings?: number;
+  /** o XMage não conhece esta carta */
+  unknown?: boolean;
+  qty?: number;
+};
+
+export type DeckSummary = {
+  path: string;
+  name: string;
+  count?: number;
+  commanders?: { name: string; set: string; num: string }[];
+  identity?: string[];
+  error?: string;
+};
+
+export type EditorDeck = {
+  path?: string | null;
+  readOnly?: boolean;
+  name: string;
+  commanders: CatalogCard[];
+  cards: CatalogCard[];
+};
+
+export type CardQuery = {
+  text?: string;
+  searchRules?: boolean;
+  types?: string[];
+  identity?: string[] | null;
+  colors?: string[];
+  mvMin?: number | null;
+  mvMax?: number | null;
+  commandersOnly?: boolean;
+  sort?: 'name' | 'mv';
+  offset?: number;
+  limit?: number;
+};
+
+export type DecklistImport = {
+  commanders: CatalogCard[];
+  cards: CatalogCard[];
+  sideboard: CatalogCard[];
+  unresolved: string[];
+};
+
 export type StopKey = 'upkeep' | 'draw' | 'main1' | 'beforeCombat' | 'endOfCombat' | 'main2' | 'endOfTurn';
 export type Stops = { yourTurn: Record<StopKey, boolean>; opponentTurn: Record<StopKey, boolean> };
 export type FormatId = 'commander' | 'duel';
@@ -158,4 +221,10 @@ export type ServerMsg =
   | { t: 'serverMessage'; message: string }
   | { t: 'userMessage'; lines: string[] }
   | { t: 'userRequest'; title: string; message: string }
-  | { t: 'event'; method: string };
+  | { t: 'event'; method: string }
+  | { t: 'cards'; reqId?: string; status: string; result: { total: number; offset: number; cards: CatalogCard[] } }
+  | { t: 'userDecks'; decks: DeckSummary[] }
+  | { t: 'deck'; deck: EditorDeck }
+  | { t: 'deckSaved'; path: string }
+  | { t: 'decklist'; result: DecklistImport }
+  | { t: 'printings'; result: { name: string; printings: { set: string; num: string }[] } };

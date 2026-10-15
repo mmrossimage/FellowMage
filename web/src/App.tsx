@@ -2,7 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect } from 'react';
 import { GameBoard } from './game/GameBoard';
 import { ConnectScreen } from './screens/ConnectScreen';
-import { LobbyScreen } from './screens/LobbyScreen';
+import { Shell } from './screens/Shell';
 import { useStore } from './store';
 import { cx } from './util';
 
@@ -10,7 +10,7 @@ export default function App() {
   const status = useStore((s) => s.status);
   return (
     <div className="h-full w-full">
-      {status === 'playing' ? <GameBoard /> : status === 'online' || status === 'starting' ? <LobbyScreen /> : <ConnectScreen />}
+      {status === 'playing' ? <GameBoard /> : status === 'online' || status === 'starting' ? <Shell /> : <ConnectScreen />}
       <Toast />
     </div>
   );

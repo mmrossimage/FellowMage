@@ -1,7 +1,9 @@
 import { create } from 'zustand';
-import type { FormatId, Game, Prompt, ServerMsg, StopKey, Stops } from './types';
+import type { DeckSummary, FormatId, Game, Prompt, ServerMsg, StopKey, Stops } from './types';
 
 type Status = 'offline' | 'connecting' | 'online' | 'starting' | 'playing';
+/** telas dentro do app (fora da partida) */
+export type View = 'home' | 'play' | 'decks' | 'editor';
 
 export type LogLine = { id: number; html: string; turnInfo?: string; kind: 'game' | 'chat' | 'system' | 'error' };
 
@@ -23,7 +25,18 @@ type State = {
   /** paradas de prioridade por passo (preferência do usuário no servidor XMage) */
   stops?: Stops;
 
+  view: View;
+  /** deck aberto no editor: caminho (null = deck novo) e texto a importar ao abrir */
+  editor?: { path: string | null; importText?: string };
+  userDecks: DeckSummary[];
+  /** deck pré-selecionado na tela "Jogar" */
+  playDeck?: string;
+
   connect: (host: string, port: number, user: string) => void;
+  navigate: (view: View, extra?: Partial<Pick<State, 'editor' | 'playDeck'>>) => void;
+  /** comando ao gateway que espera uma resposta do tipo `t` */
+  request: <T extends ServerMsg['t']>(cmd: Record<string, unknown>, t: T) => Promise<Extract<ServerMsg, { t: T }>>;
+  refreshUserDecks: () => void;
   startGame: (format: FormatId, deck: string | undefined, opponents: (string | null)[], aiSkill: number) => void;
   toggleStop: (turn: keyof Stops, key: StopKey) => void;
   send: (cmd: Record<string, unknown>) => void;
@@ -45,6 +58,11 @@ let lastConnect: { host: string; port: number; user: string } | undefined;
 let reconnectAttempts = 0;
 const MAX_RECONNECT = 8;
 
+// requisições com resposta: casadas pelo tipo da mensagem (e pelo reqId quando o gateway o devolve)
+type Waiter = { t: string; reqId?: string; resolve: (m: ServerMsg) => void };
+let waiters: Waiter[] = [];
+let reqSeq = 0;
+
 function gatewayUrl() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   return `${proto}://${location.host}/ws`;
@@ -55,11 +73,21 @@ export const useStore = create<State>((set, get) => {
     set((s) => ({ log: [...s.log.slice(-MAX_LOG + 1), { ...line, id: ++logSeq }] }));
 
   const handle = (m: ServerMsg) => {
+    const reqId = 'reqId' in m ? m.reqId : undefined;
+    const w = waiters.find((x) => x.t === m.t && (!x.reqId || !reqId || x.reqId === reqId));
+    if (w) {
+      waiters = waiters.filter((x) => x !== w);
+      w.resolve(m);
+    }
     switch (m.t) {
       case 'connected':
         // ao retomar uma sessão no meio da partida, a tela de jogo continua (o estado chega em seguida)
         set({ status: get().status === 'playing' ? 'playing' : 'online', user: m.user, server: m.server, stops: m.stops });
         get().send({ t: 'listDecks' });
+        get().refreshUserDecks();
+        break;
+      case 'userDecks':
+        set({ userDecks: m.decks });
         break;
       case 'stops':
         set({ stops: m.stops });
@@ -157,6 +185,19 @@ export const useStore = create<State>((set, get) => {
     decks: [],
     waiting: false,
     log: [],
+    view: 'home',
+    userDecks: [],
+
+    navigate: (view, extra) => set({ view, ...extra }),
+
+    request: <T extends ServerMsg['t']>(cmd: Record<string, unknown>, t: T) =>
+      new Promise<Extract<ServerMsg, { t: T }>>((resolve) => {
+        const reqId = String(++reqSeq);
+        waiters.push({ t, reqId, resolve: resolve as (m: ServerMsg) => void });
+        get().send({ ...cmd, reqId });
+      }),
+
+    refreshUserDecks: () => get().send({ t: 'userDecks' }),
 
     connect: (host, port, user) => {
       lastConnect = { host, port, user };
@@ -202,6 +243,6 @@ export const useStore = create<State>((set, get) => {
 
     setHovered: (id) => set({ hovered: id }),
     dismissToast: () => set({ toast: undefined }),
-    leaveGame: () => set({ status: 'online', game: undefined, prompt: undefined, result: undefined, waiting: false }),
+    leaveGame: () => set({ status: 'online', view: 'home', game: undefined, prompt: undefined, result: undefined, waiting: false }),
   };
 });

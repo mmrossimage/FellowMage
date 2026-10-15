@@ -5,6 +5,7 @@ import type { FormatId } from '../types';
 import { cx } from '../util';
 
 const RANDOM = '';
+const USER_FOLDER = 'Meus decks/';
 
 const FORMATS: { id: FormatId; label: string; desc: string; folder: string; maxOpponents: number }[] = [
   { id: 'commander', label: 'Commander', desc: '40 de vida · comandante · até 4 jogadores', folder: 'Commander/', maxOpponents: 3 },
@@ -30,14 +31,19 @@ export function LobbyScreen() {
   const status = useStore((s) => s.status);
   const startGame = useStore((s) => s.startGame);
 
+  const playDeck = useStore((s) => s.playDeck);
   const [formatId, setFormatId] = useState<FormatId>('commander');
   const format = FORMATS.find((f) => f.id === formatId)!;
   const [opponents, setOpponents] = useState(3);
-  const [deck, setDeck] = useState(RANDOM);
+  const [deck, setDeck] = useState(playDeck ?? RANDOM);
   const [opponentDecks, setOpponentDecks] = useState<string[]>([RANDOM, RANDOM, RANDOM]);
   const [aiSkill, setAiSkill] = useState(4);
 
-  const pool = useMemo(() => decks.filter((d) => d.startsWith(format.folder)), [decks, format.folder]);
+  // seus decks primeiro, depois os exemplos do formato
+  const pool = useMemo(
+    () => decks.filter((d) => d.startsWith(USER_FOLDER) || d.startsWith(format.folder)),
+    [decks, format.folder],
+  );
   const nOpp = Math.min(opponents, format.maxOpponents);
 
   const changeFormat = (id: FormatId) => {

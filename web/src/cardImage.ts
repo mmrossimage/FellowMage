@@ -6,7 +6,9 @@ import type { Card } from './types';
 
 export type ImageSize = 'small' | 'normal' | 'large' | 'art_crop';
 
-export function cardImageUrls(card: Pick<Card, 'name' | 'set' | 'num' | 'faceDown' | 'sourceName'>, size: ImageSize = 'normal'): string[] {
+export type ImageRef = Pick<Card, 'name'> & Partial<Pick<Card, 'set' | 'num' | 'faceDown' | 'sourceName'>>;
+
+export function cardImageUrls(card: ImageRef, size: ImageSize = 'normal'): string[] {
   if (card.faceDown) return [];
   const urls: string[] = [];
   if (card.set && card.num) {

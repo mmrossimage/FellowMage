@@ -18,17 +18,21 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class GatewayServer extends WebSocketServer implements ClientBridge.Registry {
 
     private final DeckLibrary decks;
+    private final CardCatalog catalog;
+    private final DeckService deckService;
     private final Map<WebSocket, ClientBridge> bridges = new ConcurrentHashMap<>();
     private final Map<String, ClientBridge> parked = new ConcurrentHashMap<>();
 
-    public GatewayServer(int port, DeckLibrary decks) {
+    public GatewayServer(int port, DeckLibrary decks, CardCatalog catalog, DeckService deckService) {
         super(new InetSocketAddress("127.0.0.1", port));
         this.decks = decks;
+        this.catalog = catalog;
+        this.deckService = deckService;
     }
 
     @Override
     public void onOpen(WebSocket conn, ClientHandshake handshake) {
-        bridges.put(conn, new ClientBridge(conn, decks, this));
+        bridges.put(conn, new ClientBridge(conn, decks, catalog, deckService, this));
     }
 
     @Override

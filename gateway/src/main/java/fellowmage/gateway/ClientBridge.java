@@ -106,9 +106,14 @@ public final class ClientBridge implements MageClient {
     private volatile boolean promptAnswered = true;
     private final java.util.Deque<String> chatHistory = new java.util.concurrent.ConcurrentLinkedDeque<>();
 
-    public ClientBridge(WebSocket socket, DeckLibrary decks, Registry registry) {
+    private final CardCatalog catalog;
+    private final DeckService deckService;
+
+    public ClientBridge(WebSocket socket, DeckLibrary decks, CardCatalog catalog, DeckService deckService, Registry registry) {
         this.socket = socket;
         this.decks = decks;
+        this.catalog = catalog;
+        this.deckService = deckService;
         this.registry = registry;
         pinger.scheduleAtFixedRate(() -> {
             Session s = session;
@@ -158,6 +163,35 @@ public final class ClientBridge implements MageClient {
             }
             case "setStops":
                 setStops(cmd.getAsJsonObject("stops"));
+                return;
+
+            // ---- editor de decks (não precisa de partida nem de conexão com o servidor XMage)
+            case "searchCards":
+                send(msg("cards").with("reqId", str(cmd, "reqId")).with("status", catalog.getStatus())
+                        .with("result", catalog.search(query(cmd.getAsJsonObject("query")))));
+                return;
+            case "userDecks":
+                send(msg("userDecks").with("decks", deckService.userDeckSummaries()));
+                return;
+            case "loadDeck":
+                send(msg("deck").with("deck", deckService.toEditor(str(cmd, "path"))));
+                return;
+            case "saveDeck": {
+                String saved = deckService.save(str(cmd, "path"), cmd.getAsJsonObject("deck"));
+                send(msg("deckSaved").with("path", saved));
+                send(msg("decks").with("decks", decks.list()));
+                return;
+            }
+            case "deleteDeck":
+                decks.deleteUserDeck(str(cmd, "path"));
+                send(msg("userDecks").with("decks", deckService.userDeckSummaries()));
+                send(msg("decks").with("decks", decks.list()));
+                return;
+            case "importDecklist":
+                send(msg("decklist").with("result", deckService.importText(str(cmd, "text"))));
+                return;
+            case "printings":
+                send(msg("printings").with("result", deckService.printings(str(cmd, "name"))));
                 return;
         }
 
@@ -304,6 +338,25 @@ public final class ClientBridge implements MageClient {
         }
         send(msg("tableReady").with("format", format.getLabel()).with("deck", myDeck.getName()).with("opponents", aiNames));
         session.startMatch(roomId, tableId);
+    }
+
+    private static CardCatalog.Query query(JsonObject o) {
+        CardCatalog.Query q = new CardCatalog.Query();
+        if (o == null) {
+            return q;
+        }
+        if (o.has("text")) q.text = o.get("text").getAsString();
+        if (o.has("searchRules")) q.searchRules = o.get("searchRules").getAsBoolean();
+        if (o.has("types")) q.types = DeckService.stringList(o.getAsJsonArray("types"));
+        if (o.has("identity") && !o.get("identity").isJsonNull()) q.identity = DeckService.stringList(o.getAsJsonArray("identity"));
+        if (o.has("colors")) q.colors = DeckService.stringList(o.getAsJsonArray("colors"));
+        if (o.has("mvMin") && !o.get("mvMin").isJsonNull()) q.mvMin = o.get("mvMin").getAsInt();
+        if (o.has("mvMax") && !o.get("mvMax").isJsonNull()) q.mvMax = o.get("mvMax").getAsInt();
+        if (o.has("commandersOnly")) q.commandersOnly = o.get("commandersOnly").getAsBoolean();
+        if (o.has("sort")) q.sort = o.get("sort").getAsString();
+        if (o.has("offset")) q.offset = o.get("offset").getAsInt();
+        if (o.has("limit")) q.limit = Math.min(200, o.get("limit").getAsInt());
+        return q;
     }
 
     private static String shortName(String deckName) {
