@@ -1,11 +1,13 @@
 package fellowmage.gateway;
 
 import mage.ObjectColor;
+import mage.abilities.icon.CardIconType;
 import mage.players.PlayableObjectsList;
 import mage.view.CardView;
 import mage.view.CardsView;
 import mage.view.CombatGroupView;
 import mage.view.CommandObjectView;
+import mage.view.CommanderView;
 import mage.view.CounterView;
 import mage.view.ExileView;
 import mage.view.GameView;
@@ -21,6 +23,8 @@ import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -70,7 +74,7 @@ public final class ViewMapper {
         m.put("mana", mana(p.getManaPool()));
         m.put("graveyard", cards(p.getGraveyard(), playable));
         m.put("exile", cards(p.getExile(), playable));
-        m.put("command", commands(p.getCommandObjectList()));
+        m.put("command", commands(p.getCommandObjectList(), playable));
         m.put("battlefield", p.getBattlefield().values().stream()
                 .map(perm -> permanent(perm, playable))
                 .collect(Collectors.toList()));
@@ -119,6 +123,9 @@ public final class ViewMapper {
         if (playable != null && playable.containsObject(c.getId())) {
             m.put("playable", true);
             m.put("playableCount", playable.getPlayableAmount(c.getId()));
+        }
+        if (c instanceof CommanderView || c.getCardIcons().stream().anyMatch(i -> i.getIconType() == CardIconType.COMMANDER)) {
+            m.put("commander", commanderInfo(c));
         }
         if (c.isChoosable()) {
             m.put("choosable", true);
@@ -188,17 +195,50 @@ public final class ViewMapper {
         return res;
     }
 
-    private static List<Map<String, Object>> commands(List<CommandObjectView> list) {
+    private static List<Map<String, Object>> commands(List<CommandObjectView> list, PlayableObjectsList playable) {
         List<Map<String, Object>> res = new ArrayList<>();
         for (CommandObjectView c : list) {
+            if (c instanceof CardView) {
+                // comandante na zona de comando: carta completa (pode ser conjurada clicando)
+                res.add(card((CardView) c, playable));
+                continue;
+            }
+            // emblemas, dungeons, planos...
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("id", c.getId());
             m.put("name", c.getName());
             m.put("set", c.getExpansionSetCode());
             m.put("rules", c.getRules());
+            m.put("emblem", true);
             res.add(m);
         }
         return res;
+    }
+
+    // o XMage não manda imposto/dano de comandante em campos próprios: ficam no texto da carta
+    // (ver mage.watchers.common.CommanderInfoWatcher)
+    private static final Pattern CAST_COUNT = Pattern.compile("(\\d+) times? played from the command zone");
+    private static final Pattern CMD_DAMAGE = Pattern.compile("did (\\d+) combat damage to player (.+?)\\.?$");
+
+    private static Map<String, Object> commanderInfo(CardView c) {
+        int casts = 0;
+        Map<String, Integer> damage = new LinkedHashMap<>();
+        for (String rule : c.getRules()) {
+            String text = rule.replaceAll("<[^>]+>", "").trim();
+            Matcher cast = CAST_COUNT.matcher(text);
+            if (cast.find()) {
+                casts = Integer.parseInt(cast.group(1));
+            }
+            Matcher dmg = CMD_DAMAGE.matcher(text);
+            if (dmg.find()) {
+                damage.put(dmg.group(2).trim(), Integer.parseInt(dmg.group(1)));
+            }
+        }
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("casts", casts);
+        m.put("tax", casts * 2);
+        m.put("damage", damage);
+        return m;
     }
 
     private static Map<String, Integer> mana(ManaPoolView pool) {

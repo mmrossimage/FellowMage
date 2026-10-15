@@ -1,8 +1,12 @@
 import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
+import type { CSSProperties } from 'react';
 import { useStore } from '../store';
+import type { Player } from '../types';
+import { cx } from '../util';
 import { ActionBar } from './ActionBar';
 import { Battlefield } from './Battlefield';
 import { CardPreview } from './CardPreview';
+import { seatsFromMe } from './commander';
 import { PromptDialogs } from './Dialogs';
 import { Hand, OpponentHand } from './Hand';
 import { PhaseTracker } from './PhaseTracker';
@@ -22,14 +26,13 @@ export function GameBoard() {
     );
   }
 
-  const me = game.players.find((p) => p.me) ?? game.players[0];
-  const opponent = game.players.find((p) => p.id !== me.id);
+  const [me, ...opponents] = seatsFromMe(game);
+  const multiplayer = opponents.length > 1;
 
   return (
     <LayoutGroup>
-      <div className="table-bg relative grid h-full grid-cols-[1fr_minmax(240px,19vw)] grid-rows-[auto_minmax(0,1fr)] overflow-clip">
-        {/* topo */}
-        <header className="col-span-2 flex items-center justify-between gap-4 border-b border-white/5 bg-black/30 px-5 py-2 backdrop-blur">
+      <div className="table-bg relative grid h-full grid-cols-[1fr_minmax(240px,18vw)] grid-rows-[auto_minmax(0,1fr)] overflow-clip">
+        <header className="col-span-2 flex items-center justify-between gap-4 border-b border-white/5 bg-black/30 px-5 py-1.5 backdrop-blur">
           <span className="font-display text-lg font-bold tracking-wider text-ember-300">FellowMage</span>
           <PhaseTracker />
           <button
@@ -40,22 +43,40 @@ export function GameBoard() {
           </button>
         </header>
 
-        {/* mesa */}
-        <main className="relative grid min-h-0 grid-rows-[auto_minmax(0,1fr)_minmax(0,1fr)_auto] overflow-clip">
-          {opponent && (
-            <div className="relative flex items-start justify-between px-6 pt-3">
-              <PlayerBadge player={opponent} align="top" />
-              <div className="absolute left-1/2 top-0 -translate-x-1/2">
-                <OpponentHand count={opponent.handCount} />
-              </div>
-              <div />
-            </div>
+        <main
+          className={cx(
+            'relative grid min-h-0 overflow-clip',
+            multiplayer ? 'grid-rows-[minmax(0,1.05fr)_minmax(0,1fr)_auto]' : 'grid-rows-[auto_minmax(0,1fr)_minmax(0,1fr)_auto]',
           )}
-          <section className="min-h-0">{opponent && <Battlefield player={opponent} mirrored />}</section>
+        >
+          {multiplayer ? (
+            <section className="grid min-h-0 gap-2 px-3 pt-2" style={{ gridTemplateColumns: `repeat(${opponents.length}, minmax(0, 1fr))` }}>
+              {opponents.map((p, i) => (
+                <OpponentPod key={p.id} player={p} seat={i + 1} />
+              ))}
+            </section>
+          ) : (
+            opponents[0] && (
+              <>
+                <div className="relative flex items-start justify-between px-6 pt-3">
+                  <PlayerBadge player={opponents[0]} align="top" />
+                  <div className="absolute left-1/2 top-0 -translate-x-1/2">
+                    <OpponentHand count={opponents[0].handCount} />
+                  </div>
+                  <div />
+                </div>
+                <section className="min-h-0">
+                  <Battlefield player={opponents[0]} mirrored />
+                </section>
+              </>
+            )
+          )}
+
           <section className="relative min-h-0">
             <div className="pointer-events-none absolute inset-x-[8%] top-0 h-px bg-gradient-to-r from-transparent via-ember-300/40 to-transparent" />
             <Battlefield player={me} mirrored={false} />
           </section>
+
           <div className="relative grid min-h-[calc(var(--hand-w)*0.8)] grid-cols-[minmax(220px,auto)_1fr_auto] items-end gap-4 px-6 pb-4">
             <div className="relative z-30">
               <PlayerBadge player={me} align="bottom" />
@@ -69,8 +90,8 @@ export function GameBoard() {
           </div>
         </main>
 
-        {/* lateral */}
         <aside className="flex min-h-0 flex-col gap-3 border-l border-white/5 bg-black/20 p-3">
+          <TurnOrder players={seatsFromMe(game)} />
           <StackPanel />
           <LogPanel />
         </aside>
@@ -80,6 +101,49 @@ export function GameBoard() {
         <AnimatePresence>{result && <ResultOverlay />}</AnimatePresence>
       </div>
     </LayoutGroup>
+  );
+}
+
+/** Um oponente no multiplayer: retrato + campo de batalha em escala reduzida. */
+function OpponentPod({ player, seat }: { player: Player; seat: number }) {
+  const style = { '--card-w': 'calc(var(--base-card-w) * 0.6)' } as CSSProperties;
+  return (
+    <div
+      className={cx(
+        'relative flex min-h-0 flex-col rounded-2xl border bg-black/25 transition-colors',
+        player.active ? 'border-ember-400/50 shadow-[0_0_30px_-10px_rgba(245,154,27,.5)]' : 'border-white/5',
+        player.priority && !player.active && 'border-arcane-400/40',
+      )}
+    >
+      <div className="flex items-start justify-between gap-2 px-3 pt-2">
+        <PlayerBadge player={player} align="top" compact />
+        <span className="shrink-0 rounded-full bg-white/5 px-2 py-0.5 text-[10px] text-white/40" title="Posição na ordem de turno a partir de você">
+          {seat}º
+        </span>
+      </div>
+      <div className="min-h-0 flex-1 overflow-hidden" style={style}>
+        <Battlefield player={player} mirrored />
+      </div>
+    </div>
+  );
+}
+
+/** Ordem de turno, com o jogador ativo e quem tem prioridade. */
+function TurnOrder({ players }: { players: Player[] }) {
+  if (players.length <= 2) return null;
+  return (
+    <section className="rounded-xl border border-white/10 bg-ink-900/70 p-2.5">
+      <h3 className="mb-1.5 font-display text-[10px] uppercase tracking-[0.2em] text-white/50">Ordem de turno</h3>
+      <ol className="space-y-1">
+        {players.map((p) => (
+          <li key={p.id} className={cx('flex items-center gap-2 rounded-md px-2 py-1 text-xs', p.active ? 'bg-ember-500/15 text-white' : 'text-white/65', p.left && 'line-through opacity-50')}>
+            <span className={cx('h-2 w-2 rounded-full', p.priority ? 'bg-arcane-400 shadow-[0_0_6px_rgba(95,211,245,.9)]' : p.active ? 'bg-ember-400' : 'bg-white/15')} />
+            <span className="flex-1 truncate">{p.me ? `${p.name} (você)` : p.name}</span>
+            <span className={cx('tabular-nums font-semibold', p.life <= 10 ? 'text-blood-400' : 'text-white/80')}>{p.life}</span>
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 }
 

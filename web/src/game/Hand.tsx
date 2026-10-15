@@ -1,17 +1,35 @@
 import { AnimatePresence, motion } from 'framer-motion';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { useStore } from '../store';
 import { CardBack } from './CardFace';
 import { GameCard } from './GameCard';
 
-/** Mão do jogador em leque, que sobe ao passar o mouse. */
+/** Mão do jogador em leque; a sobreposição se ajusta à largura disponível. */
 export function Hand() {
   const hand = useStore((s) => s.game?.hand ?? []);
+  const ref = useRef<HTMLDivElement>(null);
+  const [box, setBox] = useState({ width: 800, card: 150 });
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => {
+      // o contêiner tem altura = 1.1 × largura da carta (ver classe abaixo)
+      setBox({ width: el.clientWidth, card: el.clientHeight / 1.1 });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const n = hand.length;
   const spread = Math.min(5, 36 / Math.max(n, 1)); // graus entre cartas
-  const overlap = n > 9 ? -0.55 : n > 6 ? -0.42 : -0.3; // fração da largura
+  // passo horizontal entre cartas: no máximo 78% da largura da carta, no mínimo 18%
+  const step = n > 1 ? Math.max(box.card * 0.18, Math.min(box.card * 0.78, (box.width - box.card) / (n - 1))) : 0;
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-[-1rem] flex h-[calc(var(--hand-w)*1.1)] items-end justify-center">
+    <div ref={ref} className="pointer-events-none absolute inset-x-0 bottom-[-1rem] flex h-[calc(var(--hand-w)*1.1)] items-end justify-center">
       <AnimatePresence mode="popLayout">
         {hand.map((card, i) => {
           const mid = (n - 1) / 2;
@@ -22,7 +40,7 @@ export function Hand() {
               key={card.id}
               className="pointer-events-auto origin-bottom"
               style={{
-                marginLeft: i === 0 ? 0 : `calc(var(--hand-w) * ${overlap})`,
+                marginLeft: i === 0 ? 0 : step - box.card,
                 transform: `translateY(${drop + 34}%) rotate(${rot}deg)`,
                 zIndex: i,
               }}

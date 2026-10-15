@@ -82,6 +82,11 @@ function CardOverlays({ card, damage }: { card: Card; damage: number }) {
   const counters = card.counters.filter((c) => c.count > 0);
   return (
     <>
+      {card.commander && (
+        <span className="absolute left-1/2 top-[1%] -translate-x-1/2 rounded-b-md bg-black/75 px-1 text-[clamp(8px,0.8vw,13px)] leading-none" title="Comandante">
+          👑
+        </span>
+      )}
       {counters.length > 0 && (
         <div className="absolute left-[4%] top-[14%] flex flex-col gap-[2px]">
           {counters.map((c) => (

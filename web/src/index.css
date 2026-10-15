@@ -4,7 +4,8 @@
 
 :root {
   /* tamanhos de carta responsivos: tudo na mesa deriva destas variáveis */
-  --card-w: clamp(50px, min(5.4vw, 8.2vh), 116px);
+  --base-card-w: clamp(50px, min(5.4vw, 8.2vh), 116px);
+  --card-w: var(--base-card-w);
   --hand-w: clamp(84px, min(8.6vw, 15vh), 170px);
   color-scheme: dark;
 }

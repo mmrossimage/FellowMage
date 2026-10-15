@@ -38,9 +38,19 @@ via `MAVEN_OPTS` (`scripts\dev-env.ps1`).
 
 ## Estado atual (protótipo)
 
-Funciona: conectar, escolher decks, partida 1×1 contra a IA, mulligan, jogar terrenos e mágicas, passar
+Foco: **Commander com até 4 jogadores** (1 humano + até 3 IAs; "Freeform Commander" do XMage para aceitar
+todos os decks de exemplo). Duelo 1×1 continua disponível.
+
+Funciona: conectar, escolher formato/decks/nº de oponentes, mulligan, jogar terrenos e mágicas, passar
 prioridade (inclusive atalhos), alvos, pilha, histórico, diálogos de escolha/quantidade/montes/habilidades,
-cemitério/exílio, reserva de mana, fim de jogo.
+cemitério/exílio, reserva de mana, fim de jogo; zona de comando (comandante clicável + imposto), dano de
+comandante recebido, ordem de turno; trilha com todos os passos do turno e paradas de prioridade
+configuráveis por passo (seu turno / turno dos oponentes), salvas no servidor.
+
+Notas do protocolo XMage descobertas no caminho:
+- a ordem de turno é a **inversa** da lista `GameView.getPlayers()` (`CircularList.add` insere no início);
+- imposto e dano de comandante só existem como texto nas regras da carta (`CommanderInfoWatcher`);
+- o cliente precisa chamar `Session.ping()` a cada ~20 s, senão o servidor derruba o usuário.
 
 Ainda não: editor de decks, multiplayer humano/lobby de mesas, draft/torneios, setas de alvo, arrastar cartas,
 sons, configurações.

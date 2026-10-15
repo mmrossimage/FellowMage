@@ -1,3 +1,5 @@
+import type { StopKey } from './types';
+
 // Mensagens do XMage vêm em HTML (cores de nomes, negrito...). Mantemos só tags inofensivas.
 const ALLOWED = new Set(['B', 'I', 'U', 'BR', 'FONT', 'SPAN', 'STRONG', 'EM']);
 
@@ -36,7 +38,9 @@ export const symbolUrl = (sym: string) => `https://svgs.scryfall.io/card-symbols
 
 /** Substitui {T}, {R} etc. no texto das regras por <img> dos símbolos. */
 export function rulesToHtml(rule: string): string {
-  return sanitizeHtml(rule).replace(
+  // o XMage manda "&bull" (sem ";") antes de cada modo de "Choose one —"
+  const decoded = rule.replace(/&bull;?/g, '•');
+  return sanitizeHtml(decoded).replace(
     /\{([^}]+)\}/g,
     (_, s: string) => `<img src="${symbolUrl(s.replace('/', '').toUpperCase())}" alt="{${s}}" class="inline h-[1em] w-[1em] align-[-0.12em] mx-[1px]" />`,
   );
@@ -58,12 +62,49 @@ export const STEP_LABEL: Record<string, string> = {
   CLEANUP: 'Limpeza',
 };
 
-export const PHASE_TRACK: { key: string; short: string; steps: string[] }[] = [
-  { key: 'BEGINNING', short: 'Início', steps: ['UNTAP', 'UPKEEP', 'DRAW'] },
-  { key: 'PRECOMBAT_MAIN', short: 'Principal 1', steps: ['PRECOMBAT_MAIN'] },
-  { key: 'COMBAT', short: 'Combate', steps: ['BEGIN_COMBAT', 'DECLARE_ATTACKERS', 'DECLARE_BLOCKERS', 'FIRST_COMBAT_DAMAGE', 'COMBAT_DAMAGE', 'END_COMBAT'] },
-  { key: 'POSTCOMBAT_MAIN', short: 'Principal 2', steps: ['POSTCOMBAT_MAIN'] },
-  { key: 'END', short: 'Final', steps: ['END_TURN', 'CLEANUP'] },
+export type TrackStep = {
+  /** passos do XMage representados por este marcador */
+  steps: string[];
+  short: string;
+  label: string;
+  /** chave da parada de prioridade configurável (ausente = o XMage decide sozinho) */
+  stop?: StopKey;
+  /** nota quando não há parada configurável */
+  note?: string;
+};
+
+/** As 5 fases do turno e os seus passos (CR 500.1). */
+export const PHASE_TRACK: { key: string; label: string; steps: TrackStep[] }[] = [
+  {
+    key: 'BEGINNING',
+    label: 'Início',
+    steps: [
+      { steps: ['UNTAP'], short: 'Desv', label: 'Desvirar', note: 'Ninguém recebe prioridade' },
+      { steps: ['UPKEEP'], short: 'Manut', label: 'Manutenção', stop: 'upkeep' },
+      { steps: ['DRAW'], short: 'Compra', label: 'Compra', stop: 'draw' },
+    ],
+  },
+  { key: 'MAIN1', label: 'Principal 1', steps: [{ steps: ['PRECOMBAT_MAIN'], short: 'Princ 1', label: 'Fase principal 1', stop: 'main1' }] },
+  {
+    key: 'COMBAT',
+    label: 'Combate',
+    steps: [
+      { steps: ['BEGIN_COMBAT'], short: 'Início', label: 'Início do combate', stop: 'beforeCombat' },
+      { steps: ['DECLARE_ATTACKERS'], short: 'Atac', label: 'Declarar atacantes', note: 'Para sempre que houver atacantes possíveis' },
+      { steps: ['DECLARE_BLOCKERS'], short: 'Bloq', label: 'Declarar bloqueadores', note: 'Para quando você pode bloquear' },
+      { steps: ['FIRST_COMBAT_DAMAGE', 'COMBAT_DAMAGE'], short: 'Dano', label: 'Dano de combate' },
+      { steps: ['END_COMBAT'], short: 'Fim', label: 'Fim do combate', stop: 'endOfCombat' },
+    ],
+  },
+  { key: 'MAIN2', label: 'Principal 2', steps: [{ steps: ['POSTCOMBAT_MAIN'], short: 'Princ 2', label: 'Fase principal 2', stop: 'main2' }] },
+  {
+    key: 'END',
+    label: 'Final',
+    steps: [
+      { steps: ['END_TURN'], short: 'Final', label: 'Etapa final', stop: 'endOfTurn' },
+      { steps: ['CLEANUP'], short: 'Limp', label: 'Limpeza', note: 'Normalmente sem prioridade' },
+    ],
+  },
 ];
 
 export function cx(...parts: (string | false | null | undefined)[]) {

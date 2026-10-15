@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Game, Prompt, ServerMsg } from './types';
+import type { FormatId, Game, Prompt, ServerMsg, StopKey, Stops } from './types';
 
 type Status = 'offline' | 'connecting' | 'online' | 'starting' | 'playing';
 
@@ -20,9 +20,12 @@ type State = {
   toast?: { text: string; tone: 'error' | 'info' };
   result?: { won: boolean; title: string; info: string };
   hovered?: string; // id da carta sob o cursor (para o preview grande)
+  /** paradas de prioridade por passo (preferência do usuário no servidor XMage) */
+  stops?: Stops;
 
   connect: (host: string, port: number, user: string) => void;
-  startAiGame: (deck?: string, aiDeck?: string) => void;
+  startGame: (format: FormatId, deck: string | undefined, opponents: (string | null)[]) => void;
+  toggleStop: (turn: keyof Stops, key: StopKey) => void;
   send: (cmd: Record<string, unknown>) => void;
   respondUUID: (id: string) => void;
   respondBoolean: (value: boolean) => void;
@@ -50,8 +53,11 @@ export const useStore = create<State>((set, get) => {
   const handle = (m: ServerMsg) => {
     switch (m.t) {
       case 'connected':
-        set({ status: 'online', user: m.user, server: m.server });
+        set({ status: 'online', user: m.user, server: m.server, stops: m.stops });
         get().send({ t: 'listDecks' });
+        break;
+      case 'stops':
+        set({ stops: m.stops });
         break;
       case 'disconnected':
         set({ status: 'offline', game: undefined, prompt: undefined });
@@ -60,7 +66,7 @@ export const useStore = create<State>((set, get) => {
         set({ decks: m.decks });
         break;
       case 'tableReady':
-        pushLog({ kind: 'system', html: `Mesa pronta: <b>${m.deck}</b> vs IA com <b>${m.aiDeck}</b>` });
+        pushLog({ kind: 'system', html: `${m.format}: <b>${m.deck}</b> contra ${m.opponents.map((o) => `<b>${o}</b>`).join(', ')}` });
         break;
       case 'gameStarted':
         set({ status: 'playing', gameId: m.gameId, playerId: m.playerId, result: undefined, log: [] });
@@ -124,9 +130,17 @@ export const useStore = create<State>((set, get) => {
         set({ toast: { text: 'Não foi possível falar com o gateway (porta 8090). Ele está rodando?', tone: 'error' } });
     },
 
-    startAiGame: (deck, aiDeck) => {
+    startGame: (format, deck, opponents) => {
       set({ status: 'starting', result: undefined });
-      get().send({ t: 'startAiGame', deck, aiDeck });
+      get().send({ t: 'startGame', format, deck, opponents });
+    },
+
+    toggleStop: (turn, key) => {
+      const stops = get().stops;
+      if (!stops) return;
+      const next: Stops = { ...stops, [turn]: { ...stops[turn], [key]: !stops[turn][key] } };
+      set({ stops: next }); // otimista; o gateway confirma com 'stops'
+      get().send({ t: 'setStops', stops: next });
     },
 
     send: (cmd) => {

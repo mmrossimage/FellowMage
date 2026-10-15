@@ -14,6 +14,9 @@ import mage.game.match.MatchOptions;
 import mage.interfaces.MageClient;
 import mage.interfaces.callback.ClientCallback;
 import mage.players.PlayerType;
+import mage.players.net.SkipPrioritySteps;
+import mage.players.net.UserData;
+import mage.players.net.UserSkipPrioritySteps;
 import mage.remote.Connection;
 import mage.remote.Session;
 import mage.remote.SessionImpl;
@@ -46,8 +49,6 @@ import java.util.concurrent.Executors;
 public final class ClientBridge implements MageClient {
 
     private static final MageVersion VERSION = new MageVersion(MageClient.class);
-    private static final String GAME_TYPE = "Two Player Duel";
-    private static final String DECK_TYPE = "Constructed - Freeform Unlimited";
 
     private static final Gson GSON = new GsonBuilder().disableHtmlEscaping().create();
 
@@ -60,6 +61,17 @@ public final class ClientBridge implements MageClient {
         return t;
     });
 
+    // o servidor considera a conexão perdida sem pings periódicos (o cliente Swing usa 20 s, ver TablesPanel.PING_SERVER_SECS)
+    private static final int PING_SECS = 20;
+    private final java.util.concurrent.ScheduledExecutorService pinger = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread t = new Thread(r, "bridge-ping");
+        t.setDaemon(true);
+        return t;
+    });
+
+    // preferências enviadas ao servidor (inclui as paradas de prioridade por passo)
+    private final UserData userData = UserData.getDefaultUserDataView();
+
     private Session session;
     private String userName;
     private UUID roomId;
@@ -69,6 +81,12 @@ public final class ClientBridge implements MageClient {
     public ClientBridge(WebSocket socket, DeckLibrary decks) {
         this.socket = socket;
         this.decks = decks;
+        pinger.scheduleAtFixedRate(() -> {
+            Session s = session;
+            if (s != null && s.isConnected()) {
+                s.ping();
+            }
+        }, PING_SECS, PING_SECS, java.util.concurrent.TimeUnit.SECONDS);
     }
 
     // ------------------------------------------------------------------ navegador -> XMage
@@ -100,8 +118,17 @@ public final class ClientBridge implements MageClient {
             case "listDecks":
                 send(msg("decks").with("decks", decks.list()));
                 return;
-            case "startAiGame":
-                startAiGame(str(cmd, "deck"), str(cmd, "aiDeck"));
+            case "startGame": {
+                List<String> opponentDecks = new java.util.ArrayList<>();
+                if (cmd.has("opponents")) {
+                    cmd.getAsJsonArray("opponents").forEach(e -> opponentDecks.add(e.isJsonNull() ? null : e.getAsString()));
+                }
+                startGame(GameFormat.byId(str(cmd, "format")), str(cmd, "deck"), opponentDecks,
+                        cmd.has("aiSkill") ? cmd.get("aiSkill").getAsInt() : 6);
+                return;
+            }
+            case "setStops":
+                setStops(cmd.getAsJsonObject("stops"));
                 return;
         }
 
@@ -144,6 +171,7 @@ public final class ClientBridge implements MageClient {
         connection.setPort(port);
         connection.setUsername(userName);
         connection.setProxyType(Connection.ProxyType.NONE);
+        connection.setUserData(userData);
 
         session = new SessionImpl(this);
         if (!session.connectStart(connection)) {
@@ -152,32 +180,44 @@ public final class ClientBridge implements MageClient {
             return;
         }
         roomId = session.getMainRoomId();
-        send(msg("connected").with("user", userName).with("server", connection.getHost() + ":" + port));
+        send(msg("connected").with("user", userName).with("server", connection.getHost() + ":" + port)
+                .with("stops", stopsToJson()));
     }
 
-    private void startAiGame(String deckPath, String aiDeckPath) throws Exception {
+    private void startGame(GameFormat format, String deckPath, List<String> opponentDecks, int aiSkill) throws Exception {
         if (session == null || !session.isConnected()) {
             sendError("Conecte-se ao servidor antes de iniciar uma partida.");
             return;
         }
-        List<String> all = decks.list();
-        if (all.isEmpty()) {
-            sendError("Nenhum deck encontrado em " + decks.getRoot());
+        List<String> pool = decks.list().stream()
+                .filter(d -> d.startsWith(format.getDeckFolder()))
+                .collect(java.util.stream.Collectors.toList());
+        if (pool.isEmpty()) {
+            sendError("Nenhum deck em " + decks.getRoot().resolve(format.getDeckFolder()));
             return;
         }
+        int opponents = Math.max(1, Math.min(format.getMaxPlayers() - 1, opponentDecks.isEmpty() ? format.getMaxPlayers() - 1 : opponentDecks.size()));
         Random rnd = new Random();
-        DeckCardLists myDeck = decks.load(deckPath == null ? all.get(rnd.nextInt(all.size())) : deckPath);
-        DeckCardLists aiDeck = decks.load(aiDeckPath == null ? all.get(rnd.nextInt(all.size())) : aiDeckPath);
+        DeckCardLists myDeck = decks.load(deckPath == null ? pool.get(rnd.nextInt(pool.size())) : deckPath);
+        List<DeckCardLists> aiDecks = new java.util.ArrayList<>();
+        for (int i = 0; i < opponents; i++) {
+            String path = i < opponentDecks.size() ? opponentDecks.get(i) : null;
+            aiDecks.add(decks.load(path == null ? pool.get(rnd.nextInt(pool.size())) : path));
+        }
+        boolean multiplayer = opponents > 1;
+        String gameTypeName = multiplayer ? format.getMultiplayerGameType() : format.getDuelGameType();
 
         GameTypeView gameType = session.getGameTypes().stream()
-                .filter(g -> g.getName().equals(GAME_TYPE))
+                .filter(g -> g.getName().equals(gameTypeName))
                 .findFirst()
-                .orElseThrow(() -> new IllegalStateException("Servidor sem o tipo de jogo " + GAME_TYPE));
+                .orElseThrow(() -> new IllegalStateException("Servidor sem o tipo de jogo " + gameTypeName));
 
-        MatchOptions options = new MatchOptions("FellowMage: " + userName + " vs IA", gameType.getName(), false);
+        MatchOptions options = new MatchOptions("FellowMage: " + userName + " (" + format.getLabel() + ")", gameType.getName(), multiplayer);
         options.getPlayerTypes().add(PlayerType.HUMAN);
-        options.getPlayerTypes().add(PlayerType.COMPUTER_MAD);
-        options.setDeckType(DECK_TYPE);
+        for (int i = 0; i < opponents; i++) {
+            options.getPlayerTypes().add(PlayerType.COMPUTER_MAD);
+        }
+        options.setDeckType(format.getDeckType());
         options.setLimited(false);
         options.setAttackOption(MultiplayerAttackOption.MULTIPLE);
         options.setRange(RangeOfInfluence.ALL);
@@ -194,12 +234,79 @@ public final class ClientBridge implements MageClient {
             sendError("Não foi possível entrar na mesa com o deck '" + myDeck.getName() + "': " + session.getLastError());
             return;
         }
-        if (!session.joinTable(roomId, tableId, "IA", PlayerType.COMPUTER_MAD, 6, aiDeck, "")) {
-            sendError("A IA não conseguiu entrar com o deck '" + aiDeck.getName() + "': " + session.getLastError());
+        List<String> aiNames = new java.util.ArrayList<>();
+        for (int i = 0; i < aiDecks.size(); i++) {
+            String aiName = "IA " + (i + 1) + " (" + shortName(aiDecks.get(i).getName()) + ")";
+            if (!session.joinTable(roomId, tableId, aiName, PlayerType.COMPUTER_MAD, aiSkill, aiDecks.get(i), "")) {
+                sendError("A IA não conseguiu entrar com o deck '" + aiDecks.get(i).getName() + "': " + session.getLastError());
+                session.removeTable(roomId, tableId);
+                return;
+            }
+            aiNames.add(aiName);
+        }
+        send(msg("tableReady").with("format", format.getLabel()).with("deck", myDeck.getName()).with("opponents", aiNames));
+        session.startMatch(roomId, tableId);
+    }
+
+    private static String shortName(String deckName) {
+        String s = deckName.replaceAll("\\s*\\(.*?\\)", "").trim();
+        return s.length() > 18 ? s.substring(0, 17) + "…" : s;
+    }
+
+    // ------------------------------------------------------------------ paradas de prioridade
+
+    private static final String[] STOP_STEPS = {"upkeep", "draw", "main1", "beforeCombat", "endOfCombat", "main2", "endOfTurn"};
+
+    private void setStops(JsonObject stops) {
+        UserSkipPrioritySteps s = userData.getUserSkipPrioritySteps();
+        applyStops(s.getYourTurn(), stops.getAsJsonObject("yourTurn"));
+        applyStops(s.getOpponentTurn(), stops.getAsJsonObject("opponentTurn"));
+        if (session != null && session.isConnected()) {
+            session.updatePreferencesForServer(userData);
+        }
+        send(msg("stops").with("stops", stopsToJson()));
+    }
+
+    private static void applyStops(SkipPrioritySteps target, JsonObject src) {
+        if (src == null) {
             return;
         }
-        send(msg("tableReady").with("deck", myDeck.getName()).with("aiDeck", aiDeck.getName()));
-        session.startMatch(roomId, tableId);
+        for (String step : STOP_STEPS) {
+            if (!src.has(step)) {
+                continue;
+            }
+            boolean v = src.get(step).getAsBoolean();
+            switch (step) {
+                case "upkeep": target.setUpkeep(v); break;
+                case "draw": target.setDraw(v); break;
+                case "main1": target.setMain1(v); break;
+                case "beforeCombat": target.setBeforeCombat(v); break;
+                case "endOfCombat": target.setEndOfCombat(v); break;
+                case "main2": target.setMain2(v); break;
+                case "endOfTurn": target.setEndOfTurn(v); break;
+                default: break;
+            }
+        }
+    }
+
+    private Map<String, Object> stopsToJson() {
+        UserSkipPrioritySteps s = userData.getUserSkipPrioritySteps();
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("yourTurn", stepsToJson(s.getYourTurn()));
+        m.put("opponentTurn", stepsToJson(s.getOpponentTurn()));
+        return m;
+    }
+
+    private static Map<String, Boolean> stepsToJson(SkipPrioritySteps s) {
+        Map<String, Boolean> m = new LinkedHashMap<>();
+        m.put("upkeep", s.isUpkeep());
+        m.put("draw", s.isDraw());
+        m.put("main1", s.isMain1());
+        m.put("beforeCombat", s.isBeforeCombat());
+        m.put("endOfCombat", s.isEndOfCombat());
+        m.put("main2", s.isMain2());
+        m.put("endOfTurn", s.isEndOfTurn());
+        return m;
     }
 
     private void requireGame() {
@@ -209,6 +316,7 @@ public final class ClientBridge implements MageClient {
     }
 
     public void close() {
+        pinger.shutdownNow();
         worker.submit(() -> {
             if (session != null && session.isConnected()) {
                 session.connectStop(false, false);

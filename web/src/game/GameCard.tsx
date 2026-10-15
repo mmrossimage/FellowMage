@@ -12,9 +12,11 @@ type Props = {
   lift?: number;
   style?: React.CSSProperties;
   hoverRaise?: boolean;
+  /** P/T, marcadores etc. (desligar em miniaturas) */
+  overlays?: boolean;
 };
 
-export function GameCard({ card, className, lift = 0, style, hoverRaise = true }: Props) {
+export function GameCard({ card, className, lift = 0, style, hoverRaise = true, overlays = true }: Props) {
   const game = useStore((s) => s.game);
   const prompt = useStore((s) => s.prompt);
   const waiting = useStore((s) => s.waiting);
@@ -43,7 +45,7 @@ export function GameCard({ card, className, lift = 0, style, hoverRaise = true }
         onClick(card.id);
       }}
     >
-      <CardFace card={card} damage={perm?.damage ?? 0} className={cx('h-full w-full transition-shadow', hl && HIGHLIGHT_CLASS[hl])} />
+      <CardFace card={card} overlays={overlays} damage={perm?.damage ?? 0} className={cx('h-full w-full transition-shadow', hl && HIGHLIGHT_CLASS[hl])} />
       {perm?.sick && card.types.includes('CREATURE') && (
         <span className="pointer-events-none absolute left-1/2 top-1 -translate-x-1/2 rounded-full bg-black/70 px-1.5 text-[10px] text-sky-200" title="Enjoo de invocação">
           zZ

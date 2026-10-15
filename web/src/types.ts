@@ -28,7 +28,22 @@ export type Card = {
   playableCount?: number;
   choosable?: boolean;
   selected?: boolean;
+  /** presente quando a carta é um comandante */
+  commander?: CommanderInfo;
+  /** objeto da zona de comando que não é carta (emblema, dungeon...) */
+  emblem?: boolean;
 };
+
+export type CommanderInfo = {
+  casts: number;
+  tax: number;
+  /** dano de combate causado por este comandante, por nome do jogador atingido */
+  damage: Record<string, number>;
+};
+
+export type StopKey = 'upkeep' | 'draw' | 'main1' | 'beforeCombat' | 'endOfCombat' | 'main2' | 'endOfTurn';
+export type Stops = { yourTurn: Record<StopKey, boolean>; opponentTurn: Record<StopKey, boolean> };
+export type FormatId = 'commander' | 'duel';
 
 export type Permanent = Card & {
   tapped: boolean;
@@ -62,7 +77,7 @@ export type Player = {
   mana: ManaPool;
   graveyard: Card[];
   exile: Card[];
-  command: { id: string; name: string; set?: string; rules: string[] }[];
+  command: Card[];
   battlefield: Permanent[];
   topCard?: Card | null;
 };
@@ -128,10 +143,11 @@ export type Prompt = {
 };
 
 export type ServerMsg =
-  | { t: 'connected'; user: string; server: string }
+  | { t: 'connected'; user: string; server: string; stops: Stops }
   | { t: 'disconnected' }
   | { t: 'decks'; decks: string[] }
-  | { t: 'tableReady'; deck: string; aiDeck: string }
+  | { t: 'stops'; stops: Stops }
+  | { t: 'tableReady'; format: string; deck: string; opponents: string[] }
   | { t: 'gameStarted'; gameId: string; playerId: string }
   | { t: 'game'; method: string; game?: Game; prompt?: Prompt }
   | { t: 'gameOver'; message: string }
