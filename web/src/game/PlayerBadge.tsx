@@ -28,6 +28,7 @@ export function PlayerBadge({ player, align, compact = false }: Props) {
     <div className={cx('relative flex items-center', compact ? 'gap-2' : 'gap-3', player.left && 'opacity-40 grayscale')}>
       <button
         onClick={() => onClick(player.id)}
+        data-obj={player.id}
         className={cx(
           'relative flex shrink-0 items-center justify-center rounded-full border-2 bg-gradient-to-br from-ink-700 to-ink-900 shadow-panel transition',
           size,

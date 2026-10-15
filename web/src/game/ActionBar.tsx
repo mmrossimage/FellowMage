@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { useEffect } from 'react';
 import { useStore } from '../store';
+import { promptHtml } from '../i18n';
 import { cx, sanitizeHtml } from '../util';
 
 type Btn = { label: string; onClick: () => void; tone?: 'primary' | 'secondary' | 'danger'; hotkey?: string };
@@ -77,8 +78,11 @@ export function ActionBar() {
         animate={{ opacity: 1, y: 0 }}
         className={cx('rounded-xl border bg-ink-900/85 px-4 py-3 shadow-panel backdrop-blur', waiting ? 'border-ember-400/50' : 'border-white/10')}
       >
-        <div className="text-sm font-medium text-white" dangerouslySetInnerHTML={{ __html: sanitizeHtml(message) || '&nbsp;' }} />
+        <div className="text-sm font-medium text-white" dangerouslySetInnerHTML={{ __html: promptHtml(message) || '&nbsp;' }} />
         {second && <div className="mt-1 text-xs text-white/60" dangerouslySetInnerHTML={{ __html: sanitizeHtml(second) }} />}
+        {waiting && prompt?.kind === 'playMana' && (
+          <div className="mt-1 text-xs text-arcane-300">Clique nas fontes de mana destacadas (ou na sua reserva de mana) para pagar.</div>
+        )}
         {!waiting && <div className="mt-1 text-xs text-white/40">Aguardando {game?.priorityPlayerName || 'oponente'}…</div>}
       </motion.div>
 

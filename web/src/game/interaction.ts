@@ -28,8 +28,9 @@ export function highlightFor(card: Card, game: Game | undefined, prompt: Prompt 
     if (prompt.kind === 'select') {
       if (optionIds(prompt, 'possibleAttackers').includes(card.id)) return 'playable';
       if (optionIds(prompt, 'possibleBlockers').includes(card.id)) return 'playable';
-      if (card.playable) return 'playable';
     }
+    // em 'select' = pode jogar/ativar; em 'playMana' = fonte de mana que pode pagar o custo
+    if ((prompt.kind === 'select' || prompt.kind === 'playMana' || prompt.kind === 'playXMana') && card.playable) return 'playable';
   }
   const { attacking, blocking } = combatRoles(game);
   if (attacking.has(card.id)) return 'attacking';

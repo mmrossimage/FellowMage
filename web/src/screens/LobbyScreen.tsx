@@ -11,6 +11,13 @@ const FORMATS: { id: FormatId; label: string; desc: string; folder: string; maxO
   { id: 'duel', label: 'Duelo', desc: '20 de vida · 1 contra 1 · formato livre', folder: '', maxOpponents: 1 },
 ];
 
+// "skill" da IA "Computer - mad" do XMage: profundidade de busca (mais alto = mais forte e mais lento)
+const AI_LEVELS = [
+  { skill: 2, label: 'Rápida', desc: 'joga quase sem pensar' },
+  { skill: 4, label: 'Equilibrada', desc: 'bom ritmo para 4 jogadores' },
+  { skill: 7, label: 'Forte', desc: 'mais desafiadora, turnos lentos' },
+];
+
 const deckLabel = (path: string) => {
   const parts = path.replace(/\.dck$/i, '').split('/');
   return { name: parts[parts.length - 1], folder: parts.slice(0, -1).join(' / ') };
@@ -28,6 +35,7 @@ export function LobbyScreen() {
   const [opponents, setOpponents] = useState(3);
   const [deck, setDeck] = useState(RANDOM);
   const [opponentDecks, setOpponentDecks] = useState<string[]>([RANDOM, RANDOM, RANDOM]);
+  const [aiSkill, setAiSkill] = useState(4);
 
   const pool = useMemo(() => decks.filter((d) => d.startsWith(format.folder)), [decks, format.folder]);
   const nOpp = Math.min(opponents, format.maxOpponents);
@@ -68,8 +76,23 @@ export function LobbyScreen() {
           ))}
         </div>
 
+        <div className="mt-5 flex items-center gap-3">
+          <span className="text-xs uppercase tracking-wider text-white/50">Nível da IA</span>
+          {AI_LEVELS.map((l) => (
+            <button
+              key={l.skill}
+              onClick={() => setAiSkill(l.skill)}
+              title={l.desc}
+              className={cx('rounded-lg px-3 py-1.5 text-sm ring-1 transition', aiSkill === l.skill ? 'bg-ember-500 font-semibold text-ink-950 ring-ember-400' : 'bg-black/30 text-white/70 ring-white/10 hover:text-white')}
+            >
+              {l.label}
+            </button>
+          ))}
+          <span className="text-xs text-white/40">{AI_LEVELS.find((l) => l.skill === aiSkill)?.desc}</span>
+        </div>
+
         {format.maxOpponents > 1 && (
-          <div className="mt-5 flex items-center gap-3">
+          <div className="mt-4 flex items-center gap-3">
             <span className="text-xs uppercase tracking-wider text-white/50">Oponentes (IA)</span>
             {[1, 2, 3].map((n) => (
               <button
@@ -121,7 +144,7 @@ export function LobbyScreen() {
 
         <button
           disabled={status === 'starting' || pool.length === 0}
-          onClick={() => startGame(formatId, deck || undefined, opponentDecks.slice(0, nOpp).map((d) => d || null))}
+          onClick={() => startGame(formatId, deck || undefined, opponentDecks.slice(0, nOpp).map((d) => d || null), aiSkill)}
           className="mt-8 w-full rounded-xl bg-gradient-to-b from-ember-400 to-ember-500 py-3.5 font-display text-lg font-bold uppercase tracking-wider text-ink-950 transition hover:brightness-110 disabled:opacity-60"
         >
           {status === 'starting' ? 'Preparando a mesa…' : `Começar ${format.label}`}

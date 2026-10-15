@@ -38,6 +38,7 @@ export function StackPanel() {
                     initial={{ opacity: 0, scale: 0.8 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, x: -40 }}
+                    data-obj={c.id}
                     className={cx('flex gap-2 rounded-lg bg-black/30 p-1.5', i === 0 && 'ring-1 ring-ember-400/50', hl === 'target' && 'cursor-pointer')}
                     onMouseEnter={() => setHovered(c.id)}
                     onMouseLeave={() => setHovered(undefined)}

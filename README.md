@@ -50,7 +50,15 @@ configuráveis por passo (seu turno / turno dos oponentes), salvas no servidor.
 Notas do protocolo XMage descobertas no caminho:
 - a ordem de turno é a **inversa** da lista `GameView.getPlayers()` (`CircularList.add` insere no início);
 - imposto e dano de comandante só existem como texto nas regras da carta (`CommanderInfoWatcher`);
-- o cliente precisa chamar `Session.ping()` a cada ~20 s, senão o servidor derruba o usuário.
+- o cliente precisa chamar `Session.ping()` a cada ~20 s, senão o servidor derruba o usuário;
+- mesas abandonadas continuam rodando com as IAs e ocupam o limite `maxAiOpponents` (15): o gateway remove a
+  mesa ao sair/desconectar;
+- quem abandona muitas partidas é barrado com "incompatible quit ratio": o gateway cria mesas com
+  `quitRatio = 100`;
+- duas conexões simultâneas do mesmo usuário fazem o servidor derrubar uma delas.
+
+Reconexão: se o navegador cair ou a página for recarregada, o gateway mantém a sessão XMage por 2 min; o cliente
+reconecta sozinho e recebe de volta a mesa, o pedido pendente e o histórico.
 
 Ainda não: editor de decks, multiplayer humano/lobby de mesas, draft/torneios, setas de alvo, arrastar cartas,
 sons, configurações.

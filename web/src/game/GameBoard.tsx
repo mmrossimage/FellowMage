@@ -1,9 +1,11 @@
 import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
-import type { CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
+import { promptHtml } from '../i18n';
 import { useStore } from '../store';
 import type { Player } from '../types';
 import { cx } from '../util';
 import { ActionBar } from './ActionBar';
+import { Arrows } from './Arrows';
 import { Battlefield } from './Battlefield';
 import { CardPreview } from './CardPreview';
 import { seatsFromMe } from './commander';
@@ -96,8 +98,10 @@ export function GameBoard() {
           <LogPanel />
         </aside>
 
+        <Arrows />
         <CardPreview />
         <PromptDialogs />
+        <EliminatedBanner me={me} />
         <AnimatePresence>{result && <ResultOverlay />}</AnimatePresence>
       </div>
     </LayoutGroup>
@@ -147,6 +151,40 @@ function TurnOrder({ players }: { players: Player[] }) {
   );
 }
 
+/** No multiplayer, quem perde sai do jogo mas a partida continua: oferecer assistir ou sair. */
+function EliminatedBanner({ me }: { me: Player }) {
+  const result = useStore((s) => s.result);
+  const send = useStore((s) => s.send);
+  const leaveGame = useStore((s) => s.leaveGame);
+  const [dismissed, setDismissed] = useState(false);
+  const out = me.left || me.life <= 0;
+  if (!out || dismissed || result) return null;
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="fixed left-1/2 top-16 z-[55] flex -translate-x-1/2 items-center gap-4 rounded-2xl border border-blood-500/40 bg-ink-900/95 px-6 py-4 shadow-panel backdrop-blur"
+    >
+      <div>
+        <div className="font-display text-xl font-bold text-blood-400">Você foi eliminado</div>
+        <div className="text-sm text-white/60">A partida continua entre os outros jogadores.</div>
+      </div>
+      <button onClick={() => setDismissed(true)} className="rounded-xl bg-white/10 px-4 py-2 text-sm text-white ring-1 ring-white/15 hover:bg-white/20">
+        Assistir
+      </button>
+      <button
+        onClick={() => {
+          send({ t: 'quit' });
+          leaveGame();
+        }}
+        className="rounded-xl bg-gradient-to-b from-ember-400 to-ember-500 px-4 py-2 text-sm font-semibold text-ink-950"
+      >
+        Sair da partida
+      </button>
+    </motion.div>
+  );
+}
+
 function ResultOverlay() {
   const result = useStore((s) => s.result)!;
   const leaveGame = useStore((s) => s.leaveGame);
@@ -154,8 +192,8 @@ function ResultOverlay() {
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur">
       <motion.div initial={{ scale: 0.8 }} animate={{ scale: 1 }} className="text-center">
         <div className={`font-display text-6xl font-bold ${result.won ? 'text-ember-300' : 'text-blood-400'}`}>{result.won ? 'Vitória' : 'Derrota'}</div>
-        <p className="mt-3 text-white/70">{result.title}</p>
-        <p className="text-white/50">{result.info}</p>
+        <p className="mt-3 text-white/70" dangerouslySetInnerHTML={{ __html: promptHtml(result.title) }} />
+        <p className="text-white/50" dangerouslySetInnerHTML={{ __html: promptHtml(result.info) }} />
         <button onClick={leaveGame} className="mt-8 rounded-xl bg-gradient-to-b from-ember-400 to-ember-500 px-8 py-3 font-display font-bold uppercase tracking-wider text-ink-950">
           Voltar ao lobby
         </button>

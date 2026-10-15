@@ -52,7 +52,7 @@ public final class ClientBridge implements MageClient {
 
     private static final Gson GSON = new GsonBuilder().disableHtmlEscaping().create();
 
-    private final WebSocket socket;
+    private volatile WebSocket socket;
     private final DeckLibrary decks;
     // chamadas ao servidor XMage são bloqueantes: nunca rodar na thread do WebSocket
     private final ExecutorService worker = Executors.newSingleThreadExecutor(r -> {
@@ -75,12 +75,41 @@ public final class ClientBridge implements MageClient {
     private Session session;
     private String userName;
     private UUID roomId;
+    // mesa criada por este cliente: removida ao sair, senão as IAs seguem jogando no servidor
+    // e ocupam o limite de IAs simultâneas (maxAiOpponents)
+    private UUID ownTableId;
     private UUID gameId;
     private UUID playerId;
 
-    public ClientBridge(WebSocket socket, DeckLibrary decks) {
+    /** Onde pontes "estacionadas" (navegador desconectado) esperam uma reconexão. */
+    public interface Registry {
+        /** Devolve a ponte estacionada para a chave, já religada ao novo socket, ou null. */
+        ClientBridge claimParked(String key, WebSocket newSocket);
+
+        void park(String key, ClientBridge bridge);
+
+        void unpark(String key, ClientBridge bridge);
+    }
+
+    // tempo que a sessão XMage espera o navegador voltar (recarregar página, queda de rede)
+    private static final int PARK_SECS = 120;
+    private static final int CHAT_HISTORY = 200;
+
+    private final Registry registry;
+    private String parkKey;
+    private String serverLabel;
+    private volatile String lastServerError;
+    private java.util.concurrent.ScheduledFuture<?> parkExpiry;
+    // estado reenviado quando o navegador reconecta
+    private volatile String lastGameJson;
+    private volatile String lastPromptJson;
+    private volatile boolean promptAnswered = true;
+    private final java.util.Deque<String> chatHistory = new java.util.concurrent.ConcurrentLinkedDeque<>();
+
+    public ClientBridge(WebSocket socket, DeckLibrary decks, Registry registry) {
         this.socket = socket;
         this.decks = decks;
+        this.registry = registry;
         pinger.scheduleAtFixedRate(() -> {
             Session s = session;
             if (s != null && s.isConnected()) {
@@ -133,6 +162,9 @@ public final class ClientBridge implements MageClient {
         }
 
         requireGame();
+        if (type.startsWith("send")) {
+            promptAnswered = true;
+        }
         switch (type) {
             case "sendUUID":
                 session.sendPlayerUUID(gameId, UUID.fromString(str(cmd, "id")));
@@ -155,19 +187,35 @@ public final class ClientBridge implements MageClient {
             case "concede":
                 session.sendPlayerAction(PlayerAction.CONCEDE, gameId, null);
                 break;
+            case "quit":
+                // sair da partida (ex.: já eliminado no multiplayer e sem vontade de assistir)
+                leaveCurrentTable();
+                break;
             default:
                 sendError("Comando desconhecido: " + type);
         }
     }
 
     private void connect(String host, int port, String user) {
+        String realHost = host == null || host.isEmpty() ? "localhost" : host;
+        if (user != null && !user.isEmpty()) {
+            // mesmo usuário voltando dentro do prazo: retoma a sessão (e a partida) estacionada
+            String key = (user + "@" + realHost + ":" + port).toLowerCase();
+            ClientBridge parked = registry.claimParked(key, socket);
+            if (parked != null) {
+                parked.handleResume();
+                disposeUnused();
+                return;
+            }
+            parkKey = key;
+        }
         if (session != null && session.isConnected()) {
             session.connectStop(false, false);
         }
         userName = (user == null || user.isEmpty()) ? "Mago" + new Random().nextInt(10000) : user;
 
         Connection connection = new Connection();
-        connection.setHost(host == null || host.isEmpty() ? "localhost" : host);
+        connection.setHost(realHost);
         connection.setPort(port);
         connection.setUsername(userName);
         connection.setProxyType(Connection.ProxyType.NONE);
@@ -180,7 +228,8 @@ public final class ClientBridge implements MageClient {
             return;
         }
         roomId = session.getMainRoomId();
-        send(msg("connected").with("user", userName).with("server", connection.getHost() + ":" + port)
+        serverLabel = connection.getHost() + ":" + port;
+        send(msg("connected").with("user", userName).with("server", serverLabel)
                 .with("stops", stopsToJson()));
     }
 
@@ -189,6 +238,7 @@ public final class ClientBridge implements MageClient {
             sendError("Conecte-se ao servidor antes de iniciar uma partida.");
             return;
         }
+        leaveCurrentTable();
         List<String> pool = decks.list().stream()
                 .filter(d -> d.startsWith(format.getDeckFolder()))
                 .collect(java.util.stream.Collectors.toList());
@@ -223,13 +273,21 @@ public final class ClientBridge implements MageClient {
         options.setRange(RangeOfInfluence.ALL);
         options.setWinsNeeded(1);
         options.setMatchTimeLimit(MatchTimeLimit.NONE);
+        // partidas só contra IA: não barrar por "taxa de abandono" (o servidor recusa a mesa com
+        // "incompatible quit ratio" se o usuário saiu de muitas partidas antes)
+        options.setQuitRatio(100);
+        options.setMinimumRating(0);
 
+        lastServerError = null;
         TableView table = session.createTable(roomId, options);
         if (table == null) {
-            sendError("O servidor recusou a criação da mesa: " + session.getLastError());
+            if (lastServerError == null) { // senão o motivo já foi enviado por showError
+                sendError("O servidor recusou a criação da mesa. " + session.getLastError());
+            }
             return;
         }
         UUID tableId = table.getTableId();
+        ownTableId = tableId;
         if (!session.joinTable(roomId, tableId, userName, PlayerType.HUMAN, 1, myDeck, "")) {
             sendError("Não foi possível entrar na mesa com o deck '" + myDeck.getName() + "': " + session.getLastError());
             return;
@@ -315,10 +373,75 @@ public final class ClientBridge implements MageClient {
         }
     }
 
+    /** Sai da partida atual e remove a mesa criada por nós (encerra o jogo das IAs restantes). */
+    private void leaveCurrentTable() {
+        if (session == null || !session.isConnected()) {
+            return;
+        }
+        if (gameId != null) {
+            session.quitMatch(gameId);
+            gameId = null;
+        }
+        if (ownTableId != null) {
+            session.removeTable(roomId, ownTableId);
+            ownTableId = null;
+        }
+    }
+
+    /** O navegador desconectou: estaciona a sessão por um tempo ou encerra de vez. */
+    public void socketClosed(WebSocket closed) {
+        if (closed != socket) {
+            return; // já religada a outro socket
+        }
+        if (parkKey != null && session != null && session.isConnected()) {
+            registry.park(parkKey, this);
+            parkExpiry = pinger.schedule(() -> {
+                registry.unpark(parkKey, this);
+                close();
+            }, PARK_SECS, java.util.concurrent.TimeUnit.SECONDS);
+        } else {
+            close();
+        }
+    }
+
+    /** Chamado pelo registro ao entregar esta ponte a um novo socket. */
+    void attach(WebSocket newSocket) {
+        if (parkExpiry != null) {
+            parkExpiry.cancel(false);
+            parkExpiry = null;
+        }
+        this.socket = newSocket;
+    }
+
+    private void handleResume() {
+        worker.submit(() -> {
+            send(msg("connected").with("user", userName).with("server", serverLabel).with("stops", stopsToJson()).with("resumed", true));
+            send(msg("decks").with("decks", decks.list()));
+            if (gameId != null) {
+                // sendRaw: não passar por remember(), que limparia o estado guardado
+                sendRaw(GSON.toJson(msg("gameStarted").with("gameId", gameId).with("playerId", playerId).body));
+                chatHistory.forEach(this::sendRaw);
+                if (lastGameJson != null) {
+                    sendRaw(lastGameJson);
+                }
+                if (lastPromptJson != null && !promptAnswered) {
+                    sendRaw(lastPromptJson);
+                }
+            }
+        });
+    }
+
+    /** Esta ponte nova não chegou a ser usada (a conexão foi entregue a uma estacionada). */
+    private void disposeUnused() {
+        pinger.shutdownNow();
+        worker.shutdown();
+    }
+
     public void close() {
         pinger.shutdownNow();
         worker.submit(() -> {
             if (session != null && session.isConnected()) {
+                leaveCurrentTable();
                 session.connectStop(false, false);
             }
         });
@@ -532,6 +655,8 @@ public final class ClientBridge implements MageClient {
 
     @Override
     public void showError(String message) {
+        // o SessionImpl avisa aqui antes de devolver null/false nas chamadas
+        lastServerError = message;
         sendError(message);
     }
 
@@ -542,8 +667,39 @@ public final class ClientBridge implements MageClient {
     }
 
     private void send(Msg m) {
-        if (socket.isOpen()) {
-            socket.send(GSON.toJson(m.body));
+        String json = GSON.toJson(m.body);
+        remember(m.body, json);
+        sendRaw(json);
+    }
+
+    private void sendRaw(String json) {
+        WebSocket s = socket;
+        if (s != null && s.isOpen()) {
+            s.send(json);
+        }
+    }
+
+    /** Guarda o necessário para restaurar a tela se o navegador reconectar. */
+    private void remember(Map<String, Object> body, String json) {
+        Object t = body.get("t");
+        if ("gameStarted".equals(t)) {
+            chatHistory.clear();
+            lastGameJson = null;
+            lastPromptJson = null;
+        } else if ("game".equals(t)) {
+            if (body.containsKey("game")) {
+                lastGameJson = json;
+            }
+            Object prompt = body.get("prompt");
+            if (prompt instanceof Map && !"inform".equals(((Map<?, ?>) prompt).get("kind"))) {
+                lastPromptJson = json;
+                promptAnswered = false;
+            }
+        } else if ("chat".equals(t)) {
+            chatHistory.addLast(json);
+            while (chatHistory.size() > CHAT_HISTORY) {
+                chatHistory.pollFirst();
+            }
         }
     }
 

@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useState } from 'react';
 import { useStore } from '../store';
 import type { Card, Prompt } from '../types';
+import { promptHtml } from '../i18n';
 import { cx, sanitizeHtml } from '../util';
 import { CardFace } from './CardFace';
 import { HIGHLIGHT_CLASS } from './interaction';
@@ -61,7 +62,7 @@ export function PromptDialogs() {
 function Title({ html, sub }: { html?: string; sub?: string }) {
   return (
     <div className="mb-4">
-      <h2 className="font-display text-lg text-white" dangerouslySetInnerHTML={{ __html: sanitizeHtml(html) }} />
+      <h2 className="font-display text-lg text-white" dangerouslySetInnerHTML={{ __html: promptHtml(html) }} />
       {sub && <p className="mt-1 text-sm text-white/60" dangerouslySetInnerHTML={{ __html: sanitizeHtml(sub) }} />}
     </div>
   );

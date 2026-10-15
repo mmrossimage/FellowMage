@@ -45,7 +45,7 @@ export function Hand() {
                 zIndex: i,
               }}
             >
-              <GameCard card={card} className="w-[var(--hand-w)] hover:!z-50" />
+              <GameCard card={card} dragToPlay className="w-[var(--hand-w)] hover:!z-50" />
             </div>
           );
         })}

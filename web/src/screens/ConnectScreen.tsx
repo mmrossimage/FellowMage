@@ -1,6 +1,8 @@
 import { motion } from 'framer-motion';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useStore } from '../store';
+
+let autoConnectTried = false;
 
 export function ConnectScreen() {
   const connect = useStore((s) => s.connect);
@@ -14,8 +16,19 @@ export function ConnectScreen() {
     localStorageSet('fm.host', host);
     localStorageSet('fm.port', port);
     localStorageSet('fm.user', user);
+    localStorageSet('fm.auto', user ? '1' : '0');
     connect(host, Number(port), user);
   };
+
+  // ao recarregar a página: entra direto (e retoma a partida, se houver).
+  // Uma vez só por carregamento — o StrictMode monta o componente duas vezes em dev, e duas
+  // conexões simultâneas do mesmo usuário fazem o servidor XMage derrubar uma delas.
+  useEffect(() => {
+    if (autoConnectTried) return;
+    autoConnectTried = true;
+    if (status === 'offline' && user && localStorageGet('fm.auto') === '1') connect(host, Number(port), user);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="flex h-full items-center justify-center p-6">
