@@ -24,14 +24,23 @@ Servidor XMage (mage-src/Mage.Server, sem modificações, porta 17171)
 
 Imagens das cartas: [Scryfall](https://scryfall.com) (set + número; fallback por nome).
 
-## Como rodar (Windows / PowerShell)
+## Como rodar (Windows)
 
-Pré-requisitos já instalados: JDK 21 (Temurin, 64 bits), Maven 3.9 (`C:\tools`), Git, Node 24.
+**Dia a dia:** dê dois cliques em **`Iniciar FellowMage.cmd`**. Ele sobe o servidor XMage, o gateway e o
+cliente web (cada um numa janela minimizada) e abre http://localhost:5173 no navegador. Leva ~1 minuto.
+Para desligar tudo: **`Parar FellowMage.cmd`**.
 
-1. Compilar o XMage uma vez (≈10 min): `cd mage-src; mvn install -DskipTests`
-2. Servidor XMage: `scripts\start-server.ps1` (espera "Started MAGE server")
-3. Gateway: `scripts\start-gateway.ps1`
-4. Cliente web: `cd web; npm run dev` → http://localhost:5173
+Partes, se quiser subir separadamente (`scripts\`):
+
+| Parte | Script | Porta |
+|---|---|---|
+| Servidor XMage (de `mage-src`) | `start-server.ps1` | 17171 |
+| Gateway WebSocket | `start-gateway.ps1` | 8090 |
+| Cliente web (Vite) | `start-web.ps1` | 5173 |
+
+**Primeira vez numa máquina nova:** instalar JDK 21 64 bits (Temurin), Maven 3.9, Git e Node 20+;
+clonar o XMage em `mage-src` e compilar uma vez (≈10 min): `cd mage-src; mvn install -DskipTests`.
+A primeira subida do servidor também demora mais (cria o banco de cartas).
 
 O XMage precisa de `--add-opens=java.base/java.io=ALL-UNNAMED` no Java 17+ — os scripts já configuram isso
 via `MAVEN_OPTS` (`scripts\dev-env.ps1`).
