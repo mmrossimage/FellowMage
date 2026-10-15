@@ -15,3 +15,6 @@ decks/
 
 # pacote gerado
 dist/
+
+# cache do TypeScript
+*.tsbuildinfo
