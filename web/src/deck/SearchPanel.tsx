@@ -69,7 +69,7 @@ export function SearchPanel({ identity, inDeck, onAdd, onCommander, onHover, rea
     setTotal(r.result.total);
     setResults((prev) => (offset === 0 ? r.result.cards : [...prev, ...r.result.cards]));
     // catálogo ainda carregando no gateway: tentar de novo
-    if (r.status !== 'pronto' && r.status.startsWith('carregando')) setTimeout(() => run(0), 1500);
+    if (r.status !== 'pronto' && !r.status.startsWith('erro')) setTimeout(() => run(0), 2000);
   };
 
   useEffect(() => {

@@ -1,0 +1,31 @@
+FellowMage — versao de teste
+============================
+
+Commander contra a IA (ate 4 jogadores), com as regras do XMage e uma mesa no navegador.
+
+COMO JOGAR
+1. Descompacte o .zip numa pasta (ex.: Documentos\FellowMage). Nao rode de dentro do .zip.
+2. De dois cliques em "Iniciar FellowMage".
+   - Na PRIMEIRA vez o servidor cria o banco de cartas: pode levar alguns minutos.
+   - Depois disso leva cerca de 1 minuto.
+3. O navegador abre em http://localhost:5173. Digite um nome (3+ letras) e clique em Entrar.
+4. Para desligar: dois cliques em "Parar FellowMage".
+
+REQUISITOS
+- Windows 10/11 64 bits, 4 GB de RAM livres.
+- Internet (as imagens das cartas vem do Scryfall).
+- Nao precisa instalar Java nem nada: ja vem tudo na pasta.
+
+SE O WINDOWS RECLAMAR
+- "O Windows protegeu o computador" (SmartScreen): clique em "Mais informacoes" > "Executar assim mesmo".
+  Acontece porque os atalhos nao sao assinados digitalmente.
+
+SE ALGO DER ERRADO
+- Veja os arquivos da pasta "logs" e mande para quem te passou o jogo.
+
+SEUS DECKS
+- Ficam na pasta "decks" (formato .dck do XMage). Faca backup dela se quiser guardar.
+
+Creditos: motor de regras XMage (https://github.com/magefree/mage, licenca MIT);
+imagens das cartas: Scryfall. Magic: The Gathering e de propriedade da Wizards of the Coast.
+FellowMage nao e afiliado nem endossado pela Wizards of the Coast.

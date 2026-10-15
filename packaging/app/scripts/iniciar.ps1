@@ -1,0 +1,74 @@
+# FellowMage (pacote): inicia o servidor XMage e o gateway com o Java embutido e abre o navegador.
+param([switch]$SemNavegador)
+$ErrorActionPreference = 'Stop'
+$Root = Split-Path -Parent $PSScriptRoot
+$Java = Join-Path $Root 'runtime\bin\java.exe'
+$Logs = Join-Path $Root 'logs'
+New-Item -ItemType Directory -Force $Logs | Out-Null
+$host.UI.RawUI.WindowTitle = 'FellowMage'
+
+function Test-Port([int]$Port) {
+    foreach ($addr in '127.0.0.1', '::1') {
+        try {
+            $c = New-Object Net.Sockets.TcpClient($(if ($addr -eq '::1') { 'InterNetworkV6' } else { 'InterNetwork' }))
+            $c.Connect($addr, $Port)
+            $c.Close()
+            return $true
+        } catch {
+        }
+    }
+    return $false
+}
+
+function Wait-Port([string]$Name, [int]$Port, [int]$TimeoutSecs, [string]$Log) {
+    $deadline = (Get-Date).AddSeconds($TimeoutSecs)
+    while (-not (Test-Port $Port)) {
+        if ((Get-Date) -gt $deadline) {
+            throw "$Name nao respondeu em $TimeoutSecs s. Veja o log: $Log"
+        }
+        Start-Sleep -Seconds 2
+        Write-Host '.' -NoNewline
+    }
+    Write-Host ' ok' -ForegroundColor Green
+}
+
+Write-Host ''
+Write-Host '  FellowMage' -ForegroundColor Yellow
+Write-Host ''
+try {
+    $common = @('--add-opens=java.base/java.io=ALL-UNNAMED')
+
+    if (Test-Port 17171) {
+        Write-Host '  Servidor XMage ja esta rodando.' -ForegroundColor DarkGray
+    } else {
+        $first = -not (Test-Path (Join-Path $Root 'server\db\cards.h2.mv.db'))
+        Write-Host ('  Iniciando o servidor XMage' + $(if ($first) { ' (primeira vez: criando o banco de cartas, pode levar alguns minutos)' } else { '' })) -NoNewline
+        Start-Process -FilePath $Java -WorkingDirectory (Join-Path $Root 'server') -WindowStyle Hidden `
+            -ArgumentList ($common + @('-Xmx1536m', '-jar', 'lib\mage-server-1.4.62.jar')) `
+            -RedirectStandardOutput (Join-Path $Logs 'servidor.log') -RedirectStandardError (Join-Path $Logs 'servidor-erros.log')
+        Wait-Port 'O servidor XMage' 17171 900 (Join-Path $Logs 'servidor.log')
+    }
+
+    if (Test-Port 8090) {
+        Write-Host '  Gateway ja esta rodando.' -ForegroundColor DarkGray
+    } else {
+        Write-Host '  Iniciando o FellowMage' -NoNewline
+        $cp = (Join-Path $Root 'gateway\fellowmage-gateway.jar') + ';' + (Join-Path $Root 'gateway\lib\*')
+        Start-Process -FilePath $Java -WorkingDirectory $Root -WindowStyle Hidden `
+            -ArgumentList ($common + @('-Xmx768m', '-cp', "`"$cp`"", 'fellowmage.gateway.GatewayMain',
+                '--port=8090', '--samples=sample-decks', '--decks=decks', '--cards-db=server\db\cards.h2',
+                '--web=web', '--http-port=5173')) `
+            -RedirectStandardOutput (Join-Path $Logs 'gateway.log') -RedirectStandardError (Join-Path $Logs 'gateway-erros.log')
+        Wait-Port 'O FellowMage' 5173 120 (Join-Path $Logs 'gateway-erros.log')
+    }
+
+    Write-Host ''
+    Write-Host '  Pronto! Abrindo http://localhost:5173' -ForegroundColor Green
+    Write-Host '  (para desligar depois: "Parar FellowMage")' -ForegroundColor DarkGray
+    if (-not $SemNavegador) { Start-Process 'http://localhost:5173' }
+    Start-Sleep -Seconds 4
+} catch {
+    Write-Host ''
+    Write-Host "  $_" -ForegroundColor Red
+    Read-Host '  Pressione Enter para fechar'
+}

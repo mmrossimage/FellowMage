@@ -12,3 +12,6 @@ dist/
 
 # decks do usuário (dados pessoais)
 decks/
+
+# pacote gerado
+dist/

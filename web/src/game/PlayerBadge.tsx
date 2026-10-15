@@ -25,7 +25,7 @@ export function PlayerBadge({ player, align, compact = false }: Props) {
   const size = compact ? 'h-14 w-14' : 'h-20 w-20';
 
   return (
-    <div className={cx('relative flex items-center', compact ? 'gap-2' : 'gap-3', player.left && 'opacity-40 grayscale')}>
+    <div className={cx('relative flex min-w-0 items-center', compact ? 'flex-wrap gap-2' : 'gap-3', player.left && 'opacity-40 grayscale')}>
       <button
         onClick={() => onClick(player.id)}
         data-obj={player.id}
@@ -61,7 +61,7 @@ export function PlayerBadge({ player, align, compact = false }: Props) {
 
       <div className="min-w-0">
         <div className="flex items-center gap-1.5">
-          <span className={cx('truncate font-display font-bold text-white', compact ? 'max-w-[11rem] text-sm' : 'text-base')}>{player.name}</span>
+          <span className={cx('truncate font-display font-bold text-white', compact ? 'max-w-[9rem] text-sm xl:max-w-[11rem]' : 'text-base')}>{player.name}</span>
           {!player.human && <span className="rounded bg-white/10 px-1 text-[9px] uppercase tracking-wider text-white/60">IA</span>}
           {player.active && <span className="rounded bg-ember-500/20 px-1 text-[9px] uppercase tracking-wider text-ember-300">turno</span>}
           {player.left && <span className="rounded bg-blood-500/30 px-1 text-[9px] uppercase tracking-wider text-blood-400">fora</span>}

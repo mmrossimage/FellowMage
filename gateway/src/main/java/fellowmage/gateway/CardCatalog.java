@@ -87,10 +87,14 @@ public final class CardCatalog {
 
     private void load(Path dbBase) {
         Path mv = dbBase.resolveSibling(dbBase.getFileName() + ".mv.db");
-        if (!Files.exists(mv)) {
-            status = "banco de cartas não encontrado: " + mv + " (suba o servidor XMage uma vez)";
-            System.err.println(status);
-            return;
+        // primeira execução: o servidor XMage cria o banco ao subir; esperar por ele
+        while (!Files.exists(mv)) {
+            status = "aguardando o servidor XMage criar o banco de cartas…";
+            try {
+                Thread.sleep(5000);
+            } catch (InterruptedException e) {
+                return;
+            }
         }
         status = "carregando…";
         long t0 = System.currentTimeMillis();

@@ -232,6 +232,10 @@ public final class ClientBridge implements MageClient {
 
     private void connect(String host, int port, String user) {
         String realHost = host == null || host.isEmpty() ? "localhost" : host;
+        if ("localhost".equalsIgnoreCase(realHost)) {
+            // "localhost" pode resolver para ::1, e o servidor do pacote escuta só em 127.0.0.1 (IPv4)
+            realHost = "127.0.0.1";
+        }
         if (user != null && !user.isEmpty()) {
             // mesmo usuário voltando dentro do prazo: retoma a sessão (e a partida) estacionada
             String key = (user + "@" + realHost + ":" + port).toLowerCase();

@@ -65,7 +65,9 @@ let reqSeq = 0;
 
 function gatewayUrl() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  return `${proto}://${location.host}/ws`;
+  // em desenvolvimento o Vite repassa /ws para o gateway; no pacote o site é servido pelo
+  // próprio gateway (HTTP) e o WebSocket fica na porta 8090
+  return import.meta.env.DEV ? `${proto}://${location.host}/ws` : `${proto}://${location.hostname}:8090`;
 }
 
 export const useStore = create<State>((set, get) => {

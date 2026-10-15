@@ -35,7 +35,7 @@ export function GameBoard() {
     <LayoutGroup>
       <div className="table-bg relative grid h-full grid-cols-[1fr_minmax(240px,18vw)] grid-rows-[auto_minmax(0,1fr)] overflow-clip">
         <header className="col-span-2 flex items-center justify-between gap-4 border-b border-white/5 bg-black/30 px-5 py-1.5 backdrop-blur">
-          <span className="font-display text-lg font-bold tracking-wider text-ember-300">FellowMage</span>
+          <span className="hidden font-display text-lg font-bold tracking-wider text-ember-300 xl:inline">FellowMage</span>
           <PhaseTracker />
           <button
             onClick={() => confirm('Conceder a partida?') && send({ t: 'concede' })}
@@ -119,7 +119,7 @@ function OpponentPod({ player, seat }: { player: Player; seat: number }) {
         player.priority && !player.active && 'border-arcane-400/40',
       )}
     >
-      <div className="flex items-start justify-between gap-2 px-3 pt-2">
+      <div className="flex min-w-0 items-start justify-between gap-2 px-3 pt-2">
         <PlayerBadge player={player} align="top" compact />
         <span className="shrink-0 rounded-full bg-white/5 px-2 py-0.5 text-[10px] text-white/40" title="Posição na ordem de turno a partir de você">
           {seat}º
