@@ -36,6 +36,8 @@ type State = {
   playDeck?: string;
 
   connect: (host: string, port: number, user: string) => void;
+  /** encerra a sessão e volta à tela de conexão, sem entrar sozinho na próxima vez */
+  disconnect: () => void;
   navigate: (view: View, extra?: Partial<Pick<State, 'editor' | 'playDeck'>>) => void;
   /** comando ao gateway que espera uma resposta do tipo `t` */
   request: <T extends ServerMsg['t']>(cmd: Record<string, unknown>, t: T) => Promise<Extract<ServerMsg, { t: T }>>;
@@ -209,6 +211,23 @@ export const useStore = create<State>((set, get) => {
       reconnectAttempts = 0;
       set({ status: 'connecting' });
       openSocket();
+    },
+
+    disconnect: () => {
+      try {
+        localStorage.setItem('fm.auto', '0');
+      } catch {
+        // sem localStorage: só não lembra a escolha
+      }
+      get().send({ t: 'logout' });
+      lastConnect = undefined;
+      reconnectAttempts = 0;
+      if (ws) {
+        ws.onclose = null;
+        ws.close();
+        ws = undefined;
+      }
+      set({ status: 'offline', view: 'home', game: undefined, prompt: undefined, waiting: false, server: undefined, clientVersion: undefined, serverVersion: undefined });
     },
 
     startGame: (format, deck, opponents, aiSkill) => {

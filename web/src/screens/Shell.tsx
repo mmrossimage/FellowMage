@@ -16,6 +16,7 @@ const NAV: { view: View; label: string; icon: string }[] = [
 export function Shell() {
   const view = useStore((s) => s.view);
   const navigate = useStore((s) => s.navigate);
+  const disconnect = useStore((s) => s.disconnect);
   const user = useStore((s) => s.user);
   const server = useStore((s) => s.server);
   const clientVersion = useStore((s) => s.clientVersion);
@@ -45,6 +46,13 @@ export function Shell() {
         <div className="mt-auto px-1 text-center text-[10px] leading-tight text-white/35" title={[server, clientVersion && `Gateway: XMage ${clientVersion}`, serverVersion && `Servidor: ${serverVersion}`].filter(Boolean).join('\n')}>
           {user}
         </div>
+        <button
+          onClick={disconnect}
+          title="Desconectar e voltar à tela de conexão (para trocar de servidor ou de nome)"
+          className="mt-1 rounded-lg px-2 py-1 text-[11px] text-white/45 transition hover:bg-white/5 hover:text-white/80"
+        >
+          ⏻ Sair
+        </button>
       </nav>
 
       <main className="relative min-w-0 flex-1 overflow-hidden">
