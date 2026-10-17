@@ -6,9 +6,10 @@ Commander contra a IA (ate 4 jogadores), com as regras do XMage e uma mesa no na
 COMO JOGAR
 1. Descompacte o .zip numa pasta (ex.: Documentos\FellowMage). Nao rode de dentro do .zip.
 2. De dois cliques em "Iniciar FellowMage".
-   - Na PRIMEIRA vez o servidor cria o banco de cartas: pode levar alguns minutos.
-   - Depois disso leva cerca de 1 minuto.
-3. O navegador abre em http://localhost:5173. Digite um nome (3+ letras) e clique em Entrar.
+3. O navegador abre em http://localhost:5173. Digite um nome (3+ letras) e escolha:
+   - "Jogar contra a IA": liga o servidor XMage no seu computador. Na PRIMEIRA vez ele cria
+     o banco de cartas e pode levar alguns minutos; depois, cerca de 1 minuto.
+   - "Jogar online": conecta num servidor publico do XMage (ex.: beta.xmage.today).
 4. Para desligar: dois cliques em "Parar FellowMage".
 
 REQUISITOS

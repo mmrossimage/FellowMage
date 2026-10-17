@@ -32,6 +32,8 @@ export function LobbyScreen() {
   const serverVersion = useStore((s) => s.serverVersion);
   const status = useStore((s) => s.status);
   const startGame = useStore((s) => s.startGame);
+  const mode = useStore((s) => s.mode);
+  const disconnect = useStore((s) => s.disconnect);
 
   const playDeck = useStore((s) => s.playDeck);
   const [formatId, setFormatId] = useState<FormatId>('commander');
@@ -53,6 +55,34 @@ export function LobbyScreen() {
     setDeck(RANDOM);
     setOpponentDecks([RANDOM, RANDOM, RANDOM]);
   };
+
+  if (mode === 'online') {
+    // servidores públicos não aceitam mesas com IA ("Could not create player … of type Computer")
+    return (
+      <div className="flex h-full items-center justify-center overflow-auto p-6">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="w-full max-w-xl rounded-2xl border border-white/10 bg-ink-900/80 p-8 shadow-panel backdrop-blur"
+        >
+          <h1 className="font-display text-3xl font-bold text-ember-300">Jogar online</h1>
+          <p className="mt-1 text-sm text-white/50">
+            {user} @ {server}
+            {serverVersion && <span className="text-white/35"> · Servidor: {serverVersion}</span>}
+          </p>
+          <p className="mt-6 text-white/75">
+            O lobby para entrar nas mesas de outros jogadores ainda está em construção. Servidores públicos não permitem partidas contra a IA.
+          </p>
+          <button
+            onClick={disconnect}
+            className="mt-6 w-full rounded-xl bg-gradient-to-b from-ember-400 to-ember-500 py-3 font-display font-bold uppercase tracking-wider text-ink-950 transition hover:brightness-110"
+          >
+            Sair e jogar contra a IA
+          </button>
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full items-center justify-center overflow-auto p-6">

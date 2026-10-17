@@ -147,7 +147,8 @@ public final class ClientBridge implements MageClient {
     private void dispatch(String type, JsonObject cmd) throws Exception {
         switch (type) {
             case "connect":
-                connect(str(cmd, "host"), cmd.has("port") ? cmd.get("port").getAsInt() : 17171, str(cmd, "user"));
+                connect(str(cmd, "host"), cmd.has("port") ? cmd.get("port").getAsInt() : 17171, str(cmd, "user"),
+                        cmd.has("local") && cmd.get("local").getAsBoolean());
                 return;
             case "listDecks":
                 send(msg("decks").with("decks", decks.list()));
@@ -234,8 +235,13 @@ public final class ClientBridge implements MageClient {
         }
     }
 
-    private void connect(String host, int port, String user) {
+    private void connect(String host, int port, String user, boolean local) {
         String realHost = host == null || host.isEmpty() ? "localhost" : host;
+        if (local) {
+            // modo contra a IA: servidor XMage nesta máquina, ligado só quando pedido
+            realHost = LocalServer.HOST;
+            port = LocalServer.PORT;
+        }
         if ("localhost".equalsIgnoreCase(realHost)) {
             // "localhost" pode resolver para ::1, e o servidor do pacote escuta só em 127.0.0.1 (IPv4)
             realHost = "127.0.0.1";
@@ -253,6 +259,18 @@ public final class ClientBridge implements MageClient {
         }
         if (session != null && session.isConnected()) {
             session.connectStop(false, false);
+        }
+        if (local && !LocalServer.isRunning()) {
+            send(msg("localServer").with("state", "starting"));
+            try {
+                LocalServer.ensureRunning();
+            } catch (java.io.IOException e) {
+                sendError("Não foi possível iniciar o servidor local: " + e.getMessage());
+                return;
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
         }
         userName = (user == null || user.isEmpty()) ? "Mago" + new Random().nextInt(10000) : user;
 

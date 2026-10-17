@@ -217,6 +217,7 @@ export type ServerMsg =
   | { t: 'endGame'; won: boolean; title: string; info: string }
   | { t: 'chat'; message: string; turnInfo?: string; username?: string; type: string }
   | { t: 'error'; message: string }
+  | { t: 'localServer'; state: 'starting' }
   | { t: 'gameError'; message: string }
   | { t: 'serverMessage'; message: string }
   | { t: 'userMessage'; lines: string[] }

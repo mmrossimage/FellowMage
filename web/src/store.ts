@@ -4,6 +4,8 @@ import type { DeckSummary, FormatId, Game, Prompt, ServerMsg, StopKey, Stops } f
 type Status = 'offline' | 'connecting' | 'online' | 'starting' | 'playing';
 /** telas dentro do app (fora da partida) */
 export type View = 'home' | 'play' | 'decks' | 'editor';
+/** online: servidor público (contra pessoas); local: servidor XMage nesta máquina (contra a IA) */
+export type Mode = 'online' | 'local';
 
 export type LogLine = { id: number; html: string; turnInfo?: string; kind: 'game' | 'chat' | 'system' | 'error' };
 
@@ -14,6 +16,9 @@ type State = {
   /** versões do XMage no gateway e no servidor; precisam ser iguais para conectar */
   clientVersion?: string;
   serverVersion?: string;
+  mode?: Mode;
+  /** o gateway está ligando o servidor XMage local (pode levar minutos na primeira vez) */
+  localServerStarting?: boolean;
   decks: string[];
   gameId?: string;
   playerId?: string;
@@ -35,7 +40,7 @@ type State = {
   /** deck pré-selecionado na tela "Jogar" */
   playDeck?: string;
 
-  connect: (host: string, port: number, user: string) => void;
+  connect: (host: string, port: number, user: string, mode: Mode) => void;
   /** encerra a sessão e volta à tela de conexão, sem entrar sozinho na próxima vez */
   disconnect: () => void;
   navigate: (view: View, extra?: Partial<Pick<State, 'editor' | 'playDeck'>>) => void;
@@ -59,7 +64,7 @@ let ws: WebSocket | undefined;
 let logSeq = 0;
 const MAX_LOG = 300;
 // reconexão automática: o gateway mantém a sessão XMage por ~2 min após a queda
-let lastConnect: { host: string; port: number; user: string } | undefined;
+let lastConnect: { host: string; port: number; user: string; mode: Mode } | undefined;
 let reconnectAttempts = 0;
 const MAX_RECONNECT = 8;
 
@@ -89,7 +94,7 @@ export const useStore = create<State>((set, get) => {
     switch (m.t) {
       case 'connected':
         // ao retomar uma sessão no meio da partida, a tela de jogo continua (o estado chega em seguida)
-        set({ status: get().status === 'playing' ? 'playing' : 'online', user: m.user, server: m.server, clientVersion: m.clientVersion, serverVersion: m.serverVersion ?? undefined, stops: m.stops });
+        set({ status: get().status === 'playing' ? 'playing' : 'online', localServerStarting: false, user: m.user, server: m.server, clientVersion: m.clientVersion, serverVersion: m.serverVersion ?? undefined, stops: m.stops });
         get().send({ t: 'listDecks' });
         get().refreshUserDecks();
         break;
@@ -132,9 +137,12 @@ export const useStore = create<State>((set, get) => {
       case 'endGame':
         set({ result: { won: m.won, title: m.title, info: m.info }, waiting: false });
         break;
+      case 'localServer':
+        set({ localServerStarting: m.state === 'starting' });
+        break;
       case 'error':
       case 'gameError':
-        set({ toast: { text: m.message, tone: 'error' } });
+        set({ toast: { text: m.message, tone: 'error' }, localServerStarting: false });
         pushLog({ kind: 'error', html: m.message });
         if (get().status === 'connecting') set({ status: 'offline' });
         if (get().status === 'starting') set({ status: 'online' });
@@ -160,10 +168,10 @@ export const useStore = create<State>((set, get) => {
       ws.onclose = null;
       ws.close();
     }
-    const { host, port, user } = lastConnect;
+    const { host, port, user, mode } = lastConnect;
     const socket = new WebSocket(gatewayUrl());
     ws = socket;
-    socket.onopen = () => get().send({ t: 'connect', host, port, user });
+    socket.onopen = () => get().send({ t: 'connect', host, port, user, local: mode === 'local' });
     socket.onmessage = (ev) => {
       reconnectAttempts = 0;
       handle(JSON.parse(ev.data) as ServerMsg);
@@ -178,7 +186,7 @@ export const useStore = create<State>((set, get) => {
         return;
       }
       reconnectAttempts = 0;
-      set({ status: 'offline', game: undefined, prompt: undefined, waiting: false });
+      set({ status: 'offline', localServerStarting: false, game: undefined, prompt: undefined, waiting: false });
     };
     socket.onerror = () => {
       if (reconnectAttempts === 0 && get().status === 'connecting') {
@@ -206,10 +214,10 @@ export const useStore = create<State>((set, get) => {
 
     refreshUserDecks: () => get().send({ t: 'userDecks' }),
 
-    connect: (host, port, user) => {
-      lastConnect = { host, port, user };
+    connect: (host, port, user, mode) => {
+      lastConnect = { host, port, user, mode };
       reconnectAttempts = 0;
-      set({ status: 'connecting' });
+      set({ status: 'connecting', mode });
       openSocket();
     },
 
@@ -227,7 +235,7 @@ export const useStore = create<State>((set, get) => {
         ws.close();
         ws = undefined;
       }
-      set({ status: 'offline', view: 'home', game: undefined, prompt: undefined, waiting: false, server: undefined, clientVersion: undefined, serverVersion: undefined });
+      set({ status: 'offline', view: 'home', mode: undefined, localServerStarting: false, game: undefined, prompt: undefined, waiting: false, server: undefined, clientVersion: undefined, serverVersion: undefined });
     },
 
     startGame: (format, deck, opponents, aiSkill) => {

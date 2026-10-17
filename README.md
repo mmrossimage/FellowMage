@@ -74,10 +74,10 @@ FellowMage/
    ```
 
 4. Disponibilize uma instalação do XMage em `Xmage/`, incluindo `Xmage/xmage/mage-client/sample-decks`, usada pelos scripts como fonte dos decks de exemplo.
-5. Execute `Iniciar FellowMage.cmd`. O script inicia o servidor XMage na porta **17171**, o gateway na **8090** e o Vite na **5173**; depois abre <http://localhost:5173>.
+5. Execute `Iniciar FellowMage.cmd`. O script inicia o gateway na porta **8090** e o Vite na **5173**; depois abre <http://localhost:5173>. Na tela inicial, escolha **Jogar online** (servidor público, como `beta.xmage.today:17171`) ou **Jogar contra a IA**. Nesse caso, o gateway liga o servidor XMage local na porta **17171** com [`servidor-local.ps1`](scripts/servidor-local.ps1).
 6. Para encerrar, execute `Parar FellowMage.cmd`.
 
-Na primeira inicialização, o servidor pode levar mais tempo para criar o banco de cartas. Os scripts configuram o acesso reflexivo exigido pelo protocolo XMage em Java 17+.
+Na primeira vez em que o servidor local é iniciado, ele pode levar mais tempo para criar o banco de cartas. Os scripts configuram o acesso reflexivo exigido pelo protocolo XMage em Java 17+.
 
 **Execução por componente:** [servidor XMage](scripts/start-server.ps1), [gateway](scripts/start-gateway.ps1) e [cliente web](scripts/start-web.ps1).
 
@@ -94,7 +94,7 @@ Navegador (React)
     ⇅ WebSocket / JSON — /ws no Vite, encaminhado à porta 8090
 Gateway (Java; uma sessão XMage por conexão)
     ⇅ protocolo remoto e serialização Java do XMage
-Servidor XMage (porta 17171; regras e estado da partida)
+Servidor XMage (local na porta 17171 ou público; regras e estado da partida)
 ```
 
 O cliente envia comandos por [`store.ts`](web/src/store.ts). O [`GatewayServer`](gateway/src/main/java/fellowmage/gateway/GatewayServer.java) os entrega ao [`ClientBridge`](gateway/src/main/java/fellowmage/gateway/ClientBridge.java), que conversa com o XMage e devolve eventos e visões convertidos pelo [`ViewMapper`](gateway/src/main/java/fellowmage/gateway/ViewMapper.java). O editor de decks usa [`CardCatalog`](gateway/src/main/java/fellowmage/gateway/CardCatalog.java), [`DeckService`](gateway/src/main/java/fellowmage/gateway/DeckService.java) e [`DeckLibrary`](gateway/src/main/java/fellowmage/gateway/DeckLibrary.java).

@@ -1,4 +1,5 @@
-# Inicia o FellowMage completo: servidor XMage, gateway e cliente web; depois abre o navegador.
+# Inicia o FellowMage: gateway e cliente web; depois abre o navegador.
+# O servidor XMage local só sobe quando o jogador escolhe jogar contra a IA (o gateway o inicia).
 # Cada parte roda numa janela minimizada própria (feche com scripts\parar.ps1).
 param([switch]$SemNavegador)
 $ErrorActionPreference = 'Stop'
@@ -42,8 +43,6 @@ Write-Host ''
 Write-Host '  FellowMage' -ForegroundColor Yellow
 Write-Host ''
 try {
-    # o servidor XMage demora ~40 s (bem mais na primeira vez, quando cria o banco de cartas)
-    Start-Part 'servidor XMage' 'start-server.ps1' 17171 600
     Start-Part 'gateway' 'start-gateway.ps1' 8090 180
     Start-Part 'cliente web' 'start-web.ps1' 5173 180
     Write-Host ''
