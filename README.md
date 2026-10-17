@@ -1,76 +1,142 @@
-# FellowMage
+# 🧙 FellowMage — cliente web para XMage
 
-Cliente web moderno para servidores [XMage](https://github.com/magefree/mage), com interface inspirada no
-[Phase.rs](https://github.com/phase-rs/phase) (React + Tailwind + Framer Motion).
+[![Estado: protótipo](https://img.shields.io/badge/estado-prot%C3%B3tipo-orange)](#estado-do-projeto)
+[![React 18](https://img.shields.io/badge/React-18.3.1-149eca?logo=react)](web/package.json)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.6.3-3178c6?logo=typescript&logoColor=white)](web/package.json)
+[![Java](https://img.shields.io/badge/Java-17%2B-ed8b00?logo=openjdk&logoColor=white)](gateway/pom.xml)
+[![XMage](https://img.shields.io/badge/motor-XMage-7952b3)](https://github.com/magefree/mage)
 
-O motor de regras continua sendo o do XMage (dezenas de milhares de cartas implementadas). O FellowMage
-troca só a interface.
+## 📋 Sobre
 
-## Arquitetura
+O FellowMage oferece uma interface no navegador para jogar em um servidor [XMage](https://github.com/magefree/mage). O motor de regras, as cartas implementadas e as decisões da partida continuam no XMage. O FellowMage cuida da apresentação, da interação e da comunicação com o servidor por meio de um gateway Java.
 
+### ✨ Funcionalidades
+
+- 🎮 **Partidas** — Commander com um jogador humano e até três IAs, além de duelo 1×1.
+- 🃏 **Mesa de jogo** — mão, campo, pilha, alvos, zonas, histórico, reserva de mana e diálogos de decisão.
+- ⏱️ **Prioridade** — trilha das fases do turno, atalhos para passar prioridade e paradas configuráveis.
+- 👑 **Commander** — zona de comando, imposto, dano de comandante recebido e ordem de turno.
+- 🔁 **Reconexão** — o gateway mantém a sessão por até dois minutos após a queda do navegador.
+- 📚 **Decks** — editor com busca no catálogo do XMage, validação de Commander, escolha de arte, importação e exportação de listas; os decks do usuário são salvos como `.dck`.
+
+## 🛠️ Tecnologias
+
+- **React 18, TypeScript 5 e Vite 5** — interface web e build do cliente.
+- **Tailwind CSS 3 e Framer Motion 11** — estilos e animações.
+- **Zustand 4** — estado da conexão, da partida e da navegação.
+- **Java 17+ e Maven** — gateway WebSocket/JSON e integração com a sessão XMage. O fluxo de preparação local usa **JDK 21**.
+- **XMage** — servidor e motor de regras, mantidos no [repositório oficial](https://github.com/magefree/mage).
+- **Scryfall** — imagens e símbolos das cartas.
+
+## 🏗️ Estrutura do projeto
+
+```text
+FellowMage/
+├── web/                         # Cliente React, TypeScript e Vite
+│   └── src/
+│       ├── screens/             # Conexão, início, lobby e lista de decks
+│       ├── game/                # Mesa, cartas, ações e diálogos da partida
+│       ├── deck/                # Editor, busca e regras de Commander
+│       ├── store.ts             # WebSocket e estado compartilhado
+│       └── types.ts             # Contratos de mensagens e dados da interface
+├── gateway/                     # Ponte Java entre o navegador e o XMage
+│   └── src/main/java/fellowmage/gateway/
+│       ├── GatewayServer.java   # Conexões WebSocket e retomada de sessão
+│       ├── ClientBridge.java    # Comandos, callbacks e sessão XMage
+│       ├── ViewMapper.java      # Visões XMage convertidas para JSON
+│       ├── CardCatalog.java     # Busca no catálogo de cartas do servidor
+│       ├── DeckService.java     # Operações do editor de decks
+│       └── DeckLibrary.java     # Leitura e gravação de arquivos .dck
+├── scripts/                     # Inicialização, parada e empacotamento
+├── packaging/app/               # Atalhos e instruções do pacote Windows
+├── .claude/agents/              # Agente de diagnóstico com referência no XMage
+├── AGENTS.md                    # Orientação do agente para este repositório
+├── Iniciar FellowMage.cmd       # Inicia o ambiente de desenvolvimento
+└── Parar FellowMage.cmd         # Encerra os processos iniciados
 ```
-Navegador (web/: React + TS + Tailwind + Framer Motion + Zustand)
-   ⇅  WebSocket / JSON   (porta 5173 → proxy /ws → 8090)
-Gateway (gateway/: Java 17+, um cliente XMage "headless" por conexão)
-   ⇅  jboss-remoting / serialização Java (protocolo original do XMage)
-Servidor XMage (mage-src/Mage.Server, sem modificações, porta 17171)
+
+`mage-src/` (clone do XMage), `Xmage/` (instalação usada para decks de exemplo) e `decks/` (decks do usuário) são pastas locais ignoradas pelo Git; não fazem parte deste repositório.
+
+<a id="primeiros-passos"></a>
+
+## 🚀 Primeiros passos
+
+### Ambiente de desenvolvimento no Windows
+
+1. Instale **JDK 21 64 bits**, **Maven 3.9**, **Git** e **Node.js 20+**.
+2. Clone o [XMage oficial](https://github.com/magefree/mage) na pasta `mage-src/`, na raiz deste projeto.
+3. Compile o XMage uma vez:
+
+   ```powershell
+   Set-Location mage-src
+   mvn install -DskipTests
+   Set-Location ..
+   ```
+
+4. Disponibilize uma instalação do XMage em `Xmage/`, incluindo `Xmage/xmage/mage-client/sample-decks`, usada pelos scripts como fonte dos decks de exemplo.
+5. Execute `Iniciar FellowMage.cmd`. O script inicia o servidor XMage na porta **17171**, o gateway na **8090** e o Vite na **5173**; depois abre <http://localhost:5173>.
+6. Para encerrar, execute `Parar FellowMage.cmd`.
+
+Na primeira inicialização, o servidor pode levar mais tempo para criar o banco de cartas. Os scripts configuram o acesso reflexivo exigido pelo protocolo XMage em Java 17+.
+
+**Execução por componente:** [servidor XMage](scripts/start-server.ps1), [gateway](scripts/start-gateway.ps1) e [cliente web](scripts/start-web.ps1).
+
+### Pacote Windows
+
+O [script de empacotamento](scripts/empacotar.ps1) compila o cliente e o gateway e reúne o servidor XMage, um runtime Java embutido, decks de exemplo e os atalhos de inicialização. Ele depende dos arquivos locais do XMage já preparados. As instruções para quem recebe o pacote estão em [LEIA-ME.txt](packaging/app/LEIA-ME.txt).
+
+<a id="arquitetura"></a>
+
+## 🏛️ Arquitetura
+
+```text
+Navegador (React)
+    ⇅ WebSocket / JSON — /ws no Vite, encaminhado à porta 8090
+Gateway (Java; uma sessão XMage por conexão)
+    ⇅ protocolo remoto e serialização Java do XMage
+Servidor XMage (porta 17171; regras e estado da partida)
 ```
 
-- `gateway/` — `ClientBridge` traduz comandos JSON em chamadas de `mage.remote.Session` e callbacks do
-  servidor em JSON; `ViewMapper` converte `GameView`/`CardView`/... em JSON enxuto; `DeckLibrary` lê `.dck`.
-- `web/` — mesa de jogo (`src/game/`), telas de conexão e lobby (`src/screens/`), estado em `src/store.ts`.
-- `mage-src/` — clone do repositório oficial (não versionado aqui).
-- `Xmage/` — instalação original (usada só pelos decks de exemplo).
+O cliente envia comandos por [`store.ts`](web/src/store.ts). O [`GatewayServer`](gateway/src/main/java/fellowmage/gateway/GatewayServer.java) os entrega ao [`ClientBridge`](gateway/src/main/java/fellowmage/gateway/ClientBridge.java), que conversa com o XMage e devolve eventos e visões convertidos pelo [`ViewMapper`](gateway/src/main/java/fellowmage/gateway/ViewMapper.java). O editor de decks usa [`CardCatalog`](gateway/src/main/java/fellowmage/gateway/CardCatalog.java), [`DeckService`](gateway/src/main/java/fellowmage/gateway/DeckService.java) e [`DeckLibrary`](gateway/src/main/java/fellowmage/gateway/DeckLibrary.java).
 
-Imagens das cartas: [Scryfall](https://scryfall.com) (set + número; fallback por nome).
+## 🧪 Testes
 
-## Como rodar (Windows)
+O cliente dispõe de `npm run build` em `web/` para verificar TypeScript e gerar a versão de produção. O gateway usa Maven; `mvn package` em `gateway/` depende dos artefatos do XMage instalados localmente. Este repositório ainda não contém uma suíte própria de testes automatizados.
 
-**Dia a dia:** dê dois cliques em **`Iniciar FellowMage.cmd`**. Ele sobe o servidor XMage, o gateway e o
-cliente web (cada um numa janela minimizada) e abre http://localhost:5173 no navegador. Leva ~1 minuto.
-Para desligar tudo: **`Parar FellowMage.cmd`**.
+<a id="estado-do-projeto"></a>
 
-Partes, se quiser subir separadamente (`scripts\`):
+## 📊 Estado do projeto
 
-| Parte | Script | Porta |
-|---|---|---|
-| Servidor XMage (de `mage-src`) | `start-server.ps1` | 17171 |
-| Gateway WebSocket | `start-gateway.ps1` | 8090 |
-| Cliente web (Vite) | `start-web.ps1` | 5173 |
+**Protótipo.** Estão implementados os fluxos principais de jogo contra IA e edição de decks. Multiplayer humano com lobby de mesas, draft, torneios, sons e configurações ainda não foram implementados no FellowMage.
 
-**Primeira vez numa máquina nova:** instalar JDK 21 64 bits (Temurin), Maven 3.9, Git e Node 20+;
-clonar o XMage em `mage-src` e compilar uma vez (≈10 min): `cd mage-src; mvn install -DskipTests`.
-A primeira subida do servidor também demora mais (cria o banco de cartas).
+## 📚 Documentação por público
 
-O XMage precisa de `--add-opens=java.base/java.io=ALL-UNNAMED` no Java 17+ — os scripts já configuram isso
-via `MAVEN_OPTS` (`scripts\dev-env.ps1`).
+**Para quem vai jogar**
 
-## Estado atual (protótipo)
+- **[Primeiros passos](#primeiros-passos)** — preparação e inicialização no Windows.
+- **[Instruções do pacote](packaging/app/LEIA-ME.txt)** — uso da distribuição com Java embutido.
 
-Foco: **Commander com até 4 jogadores** (1 humano + até 3 IAs; "Freeform Commander" do XMage para aceitar
-todos os decks de exemplo). Duelo 1×1 continua disponível.
+**Para quem vai contribuir**
 
-Funciona: conectar, escolher formato/decks/nº de oponentes, mulligan, jogar terrenos e mágicas, passar
-prioridade (inclusive atalhos), alvos, pilha, histórico, diálogos de escolha/quantidade/montes/habilidades,
-cemitério/exílio, reserva de mana, fim de jogo; zona de comando (comandante clicável + imposto), dano de
-comandante recebido, ordem de turno; trilha com todos os passos do turno e paradas de prioridade
-configuráveis por passo (seu turno / turno dos oponentes), salvas no servidor.
+- **[Arquitetura](#arquitetura)** — fluxo entre navegador, gateway e XMage.
+- **[Orientação para agentes](AGENTS.md)** — diagnóstico de código com consulta à implementação oficial.
+- **[Agente XMage](.claude/agents/xmage-reference.md)** — procedimento especializado para investigar falhas.
 
-Notas do protocolo XMage descobertas no caminho:
-- a ordem de turno é a **inversa** da lista `GameView.getPlayers()` (`CircularList.add` insere no início);
-- imposto e dano de comandante só existem como texto nas regras da carta (`CommanderInfoWatcher`);
-- o cliente precisa chamar `Session.ping()` a cada ~20 s, senão o servidor derruba o usuário;
-- mesas abandonadas continuam rodando com as IAs e ocupam o limite `maxAiOpponents` (15): o gateway remove a
-  mesa ao sair/desconectar;
-- quem abandona muitas partidas é barrado com "incompatible quit ratio": o gateway cria mesas com
-  `quitRatio = 100`;
-- duas conexões simultâneas do mesmo usuário fazem o servidor derrubar uma delas.
+## 🔍 Links rápidos
 
-Reconexão: se o navegador cair ou a página for recarregada, o gateway mantém a sessão XMage por 2 min; o cliente
-reconecta sozinho e recebe de volta a mesa, o pedido pendente e o histórico.
+- **[Cliente web](web/src/App.tsx)** — ponto de entrada das telas.
+- **[Estado e protocolo](web/src/store.ts)** — mensagens WebSocket, partida e reconexão.
+- **[Gateway](gateway/src/main/java/fellowmage/gateway/ClientBridge.java)** — integração com a API do XMage.
+- **[Editor de decks](web/src/deck/DeckEditor.tsx)** — interface de edição e importação.
+- **[XMage oficial](https://github.com/magefree/mage)** — referência do motor e do protocolo.
 
-Editor de decks: busca no catálogo de cartas implementadas no XMage (lido do banco do servidor, só leitura),
-filtros de Commander, validação (100 cartas, singleton, identidade de cor), troca de arte, importar/exportar
-listas (Moxfield, Archidekt, Arena/MTGO, .dck). Os decks ficam em `decks/` no formato `.dck` do XMage.
+## 🤝 Contribuindo
 
-Ainda não: multiplayer humano/lobby de mesas, draft/torneios, sons, configurações.
+Para corrigir um comportamento, reproduza o problema e identifique se ele está na interface, no gateway ou no XMage. Quando a dúvida envolver regras, callbacks, sessão ou formato de dados do XMage, consulte o [código oficial](https://github.com/magefree/mage) na versão compatível com a instalação local. Registre o arquivo e a revisão usados como referência e valide a adaptação no FellowMage. O procedimento está em [AGENTS.md](AGENTS.md).
+
+## 📖 Recursos externos
+
+- [XMage — código e documentação oficiais](https://github.com/magefree/mage)
+- [Scryfall — imagens das cartas](https://scryfall.com)
+
+Magic: The Gathering pertence à Wizards of the Coast. FellowMage não é afiliado nem endossado pela Wizards of the Coast.
