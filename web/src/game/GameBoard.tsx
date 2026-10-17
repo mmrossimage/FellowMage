@@ -8,6 +8,7 @@ import { ActionBar } from './ActionBar';
 import { Arrows } from './Arrows';
 import { Battlefield } from './Battlefield';
 import { CardPreview } from './CardPreview';
+import { ExileZones } from './ExileZones';
 import { seatsFromMe } from './commander';
 import { PromptDialogs } from './Dialogs';
 import { Hand, OpponentHand } from './Hand';
@@ -95,6 +96,7 @@ export function GameBoard() {
         <aside className="flex min-h-0 flex-col gap-3 border-l border-white/5 bg-black/20 p-3">
           <TurnOrder players={seatsFromMe(game)} />
           <StackPanel />
+          <ExileZones />
           <LogPanel />
         </aside>
 
