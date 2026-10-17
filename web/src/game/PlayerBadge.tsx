@@ -3,10 +3,10 @@ import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../store';
 import type { Card, ManaPool, Player } from '../types';
 import { cx, symbolUrl } from '../util';
-import { CardFace } from './CardFace';
 import { commanderDamageTaken, commandersOf } from './commander';
 import { GameCard } from './GameCard';
 import { useObjectClick } from './interaction';
+import { ZoneCards } from './ZoneCards';
 
 type Props = { player: Player; align: 'top' | 'bottom'; compact?: boolean };
 
@@ -201,7 +201,6 @@ function ManaPoolView({ pool, playerId }: { pool: ManaPool; playerId: string }) 
 }
 
 function ZonePopover({ title, cards, onClose, align }: { title: string; cards: Card[]; onClose: () => void; align: 'top' | 'bottom' }) {
-  const setHovered = useStore((s) => s.setHovered);
   return (
     <motion.div
       initial={{ opacity: 0, y: align === 'top' ? -10 : 10 }}
@@ -216,17 +215,7 @@ function ZonePopover({ title, cards, onClose, align }: { title: string; cards: C
         <span className="font-display text-sm text-white">{title}</span>
         <button onClick={onClose} className="text-white/60 hover:text-white">✕</button>
       </div>
-      {cards.length === 0 ? (
-        <p className="text-sm text-white/50">Vazio.</p>
-      ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(90px,1fr))] gap-2">
-          {cards.map((c) => (
-            <div key={c.id} onMouseEnter={() => setHovered(c.id)} onMouseLeave={() => setHovered(undefined)}>
-              <CardFace card={c} size="small" />
-            </div>
-          ))}
-        </div>
-      )}
+      <ZoneCards cards={cards} />
     </motion.div>
   );
 }
