@@ -1,20 +1,35 @@
-# upstream / instalação original (não versionar aqui)
+# Fontes e instalação locais do XMage
 mage-src/
 Xmage/
 
-# build
+# Dados do usuário e arquivos criados ao executar o jogo
+decks/
+logs/
+*.log
+*.log.*
+
+# Builds e dependências
 target/
 node_modules/
 dist/
-
-# logs
-*.log
-
-# decks do usuário (dados pessoais)
-decks/
-
-# pacote gerado
-dist/
-
-# cache do TypeScript
+coverage/
 *.tsbuildinfo
+.vite/
+
+# Configuração local e segredos (exemplos podem ser versionados)
+.env
+.env.*
+!.env.example
+!.env.sample
+
+# IDEs e sistema operacional
+.vs/
+.vscode/
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Saída local do grafo do código
+graphify-out/
