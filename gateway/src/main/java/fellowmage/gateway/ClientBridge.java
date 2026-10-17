@@ -225,6 +225,10 @@ public final class ClientBridge implements MageClient {
                 // sair da partida (ex.: já eliminado no multiplayer e sem vontade de assistir)
                 leaveCurrentTable();
                 break;
+            case "logout":
+                // saída voluntária: ao fechar o socket, encerra a sessão em vez de estacioná-la
+                parkKey = null;
+                break;
             default:
                 sendError("Comando desconhecido: " + type);
         }
