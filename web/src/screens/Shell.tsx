@@ -18,6 +18,8 @@ export function Shell() {
   const navigate = useStore((s) => s.navigate);
   const user = useStore((s) => s.user);
   const server = useStore((s) => s.server);
+  const clientVersion = useStore((s) => s.clientVersion);
+  const serverVersion = useStore((s) => s.serverVersion);
   const active = view === 'editor' ? 'decks' : view;
 
   return (
@@ -40,7 +42,7 @@ export function Shell() {
             <span className="relative font-medium">{n.label}</span>
           </button>
         ))}
-        <div className="mt-auto px-1 text-center text-[10px] leading-tight text-white/35" title={server}>
+        <div className="mt-auto px-1 text-center text-[10px] leading-tight text-white/35" title={[server, clientVersion && `Gateway: XMage ${clientVersion}`, serverVersion && `Servidor: ${serverVersion}`].filter(Boolean).join('\n')}>
           {user}
         </div>
       </nav>

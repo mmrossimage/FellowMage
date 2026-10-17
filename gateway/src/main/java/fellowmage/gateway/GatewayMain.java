@@ -51,7 +51,7 @@ public final class GatewayMain {
         GatewayServer server = new GatewayServer(port, decks, catalog, deckService);
         server.setReuseAddr(true);
         server.start();
-        System.out.println("FellowMage gateway: ws://localhost:" + port
+        System.out.println("FellowMage gateway: ws://localhost:" + port + "  (XMage " + ClientBridge.VERSION + ")"
                 + "  (exemplos: " + decks.getRoot() + "; meus decks: " + decks.getUserRoot() + "; " + decks.list().size() + " arquivos)");
 
         if (opt.containsKey("web")) {

@@ -48,7 +48,7 @@ import java.util.concurrent.Executors;
  */
 public final class ClientBridge implements MageClient {
 
-    private static final MageVersion VERSION = new MageVersion(MageClient.class);
+    static final MageVersion VERSION = new MageVersion(MageClient.class);
 
     private static final Gson GSON = new GsonBuilder().disableHtmlEscaping().create();
 
@@ -268,6 +268,7 @@ public final class ClientBridge implements MageClient {
         roomId = session.getMainRoomId();
         serverLabel = connection.getHost() + ":" + port;
         send(msg("connected").with("user", userName).with("server", serverLabel)
+                .with("clientVersion", VERSION.toString()).with("serverVersion", session.getVersionInfo())
                 .with("stops", stopsToJson()));
     }
 
@@ -472,7 +473,9 @@ public final class ClientBridge implements MageClient {
 
     private void handleResume() {
         worker.submit(() -> {
-            send(msg("connected").with("user", userName).with("server", serverLabel).with("stops", stopsToJson()).with("resumed", true));
+            send(msg("connected").with("user", userName).with("server", serverLabel)
+                    .with("clientVersion", VERSION.toString()).with("serverVersion", session == null ? null : session.getVersionInfo())
+                    .with("stops", stopsToJson()).with("resumed", true));
             send(msg("decks").with("decks", decks.list()));
             if (gameId != null) {
                 // sendRaw: não passar por remember(), que limparia o estado guardado

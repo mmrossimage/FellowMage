@@ -11,6 +11,9 @@ type State = {
   status: Status;
   user?: string;
   server?: string;
+  /** versões do XMage no gateway e no servidor; precisam ser iguais para conectar */
+  clientVersion?: string;
+  serverVersion?: string;
   decks: string[];
   gameId?: string;
   playerId?: string;
@@ -84,7 +87,7 @@ export const useStore = create<State>((set, get) => {
     switch (m.t) {
       case 'connected':
         // ao retomar uma sessão no meio da partida, a tela de jogo continua (o estado chega em seguida)
-        set({ status: get().status === 'playing' ? 'playing' : 'online', user: m.user, server: m.server, stops: m.stops });
+        set({ status: get().status === 'playing' ? 'playing' : 'online', user: m.user, server: m.server, clientVersion: m.clientVersion, serverVersion: m.serverVersion ?? undefined, stops: m.stops });
         get().send({ t: 'listDecks' });
         get().refreshUserDecks();
         break;
