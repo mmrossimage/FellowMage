@@ -48,7 +48,7 @@ public final class ViewMapper {
         m.put("hand", cards(g.getMyHand(), playable));
         m.put("stack", cards(g.getStack(), playable));
         m.put("combat", g.getCombat().stream().map(ViewMapper::combat).collect(Collectors.toList()));
-        m.put("exiles", g.getExile().stream().map(ViewMapper::exile).collect(Collectors.toList()));
+        m.put("exiles", g.getExile().stream().map(e -> exile(e, playable)).collect(Collectors.toList()));
         m.put("revealed", g.getRevealed().stream().map(ViewMapper::revealed).collect(Collectors.toList()));
         m.put("lookedAt", g.getLookedAt().stream().map(ViewMapper::lookedAt).collect(Collectors.toList()));
         m.put("playable", playable == null ? new ArrayList<>() : new ArrayList<>(playable.getObjects().keySet()));
@@ -160,11 +160,11 @@ public final class ViewMapper {
         return m;
     }
 
-    private static Map<String, Object> exile(ExileView e) {
+    private static Map<String, Object> exile(ExileView e, PlayableObjectsList playable) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", e.getId());
         m.put("name", e.getName());
-        m.put("cards", cards(e, null));
+        m.put("cards", cards(e, playable));
         return m;
     }
 

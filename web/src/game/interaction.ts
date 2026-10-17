@@ -10,6 +10,15 @@ function optionIds(prompt: Prompt | undefined, key: string): string[] {
   return Array.isArray(v) ? (v as string[]) : [];
 }
 
+/** O pedido atual do XMage é a fonte de verdade para cliques em cartas de qualquer zona. */
+export function canChooseCard(card: Card, prompt: Prompt | undefined, waiting: boolean): boolean {
+  if (!waiting || !prompt || !CLICKABLE_KINDS.has(prompt.kind)) return false;
+  const target = prompt.targets?.includes(card.id) ?? false;
+  if (prompt.kind === 'target') return target;
+  if (prompt.kind === 'select') return target || !!card.playable;
+  return !!card.playable;
+}
+
 export function combatRoles(game: Game | undefined) {
   const attacking = new Set<string>();
   const blocking = new Set<string>();
@@ -22,7 +31,7 @@ export function combatRoles(game: Game | undefined) {
 
 /** Destaque visual de uma carta de acordo com o pedido atual do servidor. */
 export function highlightFor(card: Card, game: Game | undefined, prompt: Prompt | undefined, waiting: boolean): Highlight {
-  if (card.selected) return 'selected';
+  if (card.selected || (waiting && optionIds(prompt, 'chosenTargets').includes(card.id))) return 'selected';
   if (waiting && prompt) {
     if (prompt.targets?.includes(card.id)) return 'target';
     if (prompt.kind === 'select') {
