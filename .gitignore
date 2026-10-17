@@ -30,6 +30,9 @@ coverage/
 .DS_Store
 Thumbs.db
 Desktop.ini
-
-# Saída local do grafo do código
 graphify-out/
+# cache do TypeScript
+*.tsbuildinfo
+/.vs/FellowMage/FileContentIndex
+/.vs/slnx.sqlite
+/.vs/slnx.sqlite-journal
