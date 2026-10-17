@@ -28,6 +28,8 @@ export function LobbyScreen() {
   const decks = useStore((s) => s.decks);
   const user = useStore((s) => s.user);
   const server = useStore((s) => s.server);
+  const clientVersion = useStore((s) => s.clientVersion);
+  const serverVersion = useStore((s) => s.serverVersion);
   const status = useStore((s) => s.status);
   const startGame = useStore((s) => s.startGame);
 
@@ -61,9 +63,16 @@ export function LobbyScreen() {
       >
         <div className="flex items-baseline justify-between">
           <h1 className="font-display text-3xl font-bold text-ember-300">Nova partida contra a IA</h1>
-          <span className="text-sm text-white/50">
-            {user} @ {server}
-          </span>
+          <div className="text-right">
+            <div className="text-sm text-white/50">
+              {user} @ {server}
+            </div>
+            {clientVersion && (
+              <div className="text-xs text-white/35">
+                Gateway: XMage {clientVersion} · Servidor: {serverVersion ?? '?'}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="mt-6 grid grid-cols-2 gap-3">

@@ -206,7 +206,7 @@ export type Prompt = {
 };
 
 export type ServerMsg =
-  | { t: 'connected'; user: string; server: string; stops: Stops }
+  | { t: 'connected'; user: string; server: string; clientVersion?: string; serverVersion?: string | null; stops: Stops }
   | { t: 'disconnected' }
   | { t: 'decks'; decks: string[] }
   | { t: 'stops'; stops: Stops }
