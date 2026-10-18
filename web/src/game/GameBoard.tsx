@@ -208,6 +208,7 @@ function ResultOverlay() {
   const result = useStore((s) => s.result);
   const gameOver = useStore((s) => s.gameOver);
   const leaveGame = useStore((s) => s.leaveGame);
+  const dismissResult = useStore((s) => s.dismissResult);
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur">
       <motion.div initial={{ scale: 0.8 }} animate={{ scale: 1 }} className="text-center">
@@ -216,6 +217,7 @@ function ResultOverlay() {
             <div className={`font-display text-6xl font-bold ${result.won ? 'text-ember-300' : 'text-blood-400'}`}>{result.won ? 'Vitória' : 'Derrota'}</div>
             <p className="mt-3 text-white/70" dangerouslySetInnerHTML={{ __html: promptHtml(result.title) }} />
             <p className="text-white/50" dangerouslySetInnerHTML={{ __html: promptHtml(result.info) }} />
+            {result.extra && <p className="text-white/50" dangerouslySetInnerHTML={{ __html: promptHtml(result.extra) }} />}
           </>
         ) : (
           // só o GAME_OVER chegou (o END_GAME_INFO vem da partida e pode faltar): como o "Close game" do cliente oficial
@@ -224,9 +226,24 @@ function ResultOverlay() {
             <p className="mt-3 text-white/70" dangerouslySetInnerHTML={{ __html: promptHtml(gameOver ?? '') }} />
           </>
         )}
-        <button onClick={leaveGame} className="mt-8 rounded-xl bg-gradient-to-b from-ember-400 to-ember-500 px-8 py-3 font-display font-bold uppercase tracking-wider text-ink-950">
-          Voltar ao lobby
-        </button>
+        {result && !result.matchOver ? (
+          // melhor de N: o próximo jogo começa depois do sideboard; sair aqui abandonaria a partida
+          <div className="mt-8 flex justify-center gap-3">
+            <button onClick={dismissResult} className="rounded-xl bg-gradient-to-b from-ember-400 to-ember-500 px-8 py-3 font-display font-bold uppercase tracking-wider text-ink-950">
+              Próximo jogo
+            </button>
+            <button
+              onClick={() => confirm('Abandonar a partida? Os jogos restantes contam como derrota.') && leaveGame()}
+              className="rounded-xl bg-white/10 px-6 py-3 text-sm text-white ring-1 ring-white/15 hover:bg-white/20"
+            >
+              Abandonar partida
+            </button>
+          </div>
+        ) : (
+          <button onClick={leaveGame} className="mt-8 rounded-xl bg-gradient-to-b from-ember-400 to-ember-500 px-8 py-3 font-display font-bold uppercase tracking-wider text-ink-950">
+            Voltar ao lobby
+          </button>
+        )}
       </motion.div>
     </motion.div>
   );

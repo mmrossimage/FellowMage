@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { sessionSet } from './util';
-import type { ChatKind, CreateTableOptions, DeckSummary, FormatId, Game, LobbyOptions, LobbyTable, Prompt, ServerMsg, StopKey, Stops, UserRequest } from './types';
+import type { ChatKind, CreateTableOptions, DeckSummary, FormatId, Game, LobbyOptions, LobbyTable, Prompt, ServerMsg, StopKey, Stops, UserRequest, DeckBuild } from './types';
 
 type Status = 'offline' | 'connecting' | 'online' | 'starting' | 'playing';
 /** telas dentro do app (fora da partida) */
@@ -42,7 +42,10 @@ type State = {
   waiting: boolean;
   log: LogLine[];
   toast?: { text: string; tone: 'error' | 'info' };
-  result?: { won: boolean; title: string; info: string };
+  /** matchOver = false: fim de um jogo numa partida melhor de N (o próximo jogo vem a seguir) */
+  result?: { won: boolean; title: string; info: string; extra?: string; matchOver: boolean };
+  /** esconde o resultado de um jogo intermediário e aguarda o próximo */
+  dismissResult: () => void;
   /** GAME_OVER: o jogo acabou no servidor (o resultado detalhado pode chegar depois, ou nunca) */
   gameOver?: string;
   hovered?: string; // id da carta sob o cursor (para o preview grande)
@@ -83,6 +86,8 @@ type State = {
   action: (action: string, data?: string | number) => void;
   /** pedidos do servidor com botões (voltar turnos, ver mão...), mostrados um por vez */
   userRequests: UserRequest[];
+  /** o servidor pediu para montar o deck (sideboard entre jogos ou limitado); `since` = quando chegou */
+  deckBuild?: DeckBuild & { since: number };
   userReply: (id: string, action: string | null) => void;
   /** opções da partida no servidor; o XMage não as devolve, então o cliente guarda o último valor enviado */
   gamePrefs: GamePrefs;
@@ -206,7 +211,7 @@ export const useStore = create<State>((set, get) => {
         set({ waiting: false, prompt: undefined, gameOver: m.message });
         break;
       case 'endGame':
-        set({ result: { won: m.won, title: m.title, info: m.info }, waiting: false });
+        set({ result: { won: m.won, title: m.title, info: m.info, extra: m.extra, matchOver: m.matchOver ?? true }, waiting: false });
         break;
       case 'localServer':
         set({ localServerStarting: m.state === 'starting' });
@@ -223,6 +228,12 @@ export const useStore = create<State>((set, get) => {
         break;
       case 'userMessage':
         set({ toast: { text: m.lines.join(' — '), tone: 'info' } });
+        break;
+      case 'deckBuild':
+        set({ deckBuild: { ...m.build, since: Date.now() } });
+        break;
+      case 'deckBuildDone':
+        set({ deckBuild: undefined });
         break;
       case 'userRequest': {
         const { t: _t, ...req } = m;
@@ -308,7 +319,7 @@ export const useStore = create<State>((set, get) => {
         ws.close();
         ws = undefined;
       }
-      set({ status: 'offline', view: 'home', mode: undefined, localServerStarting: false, table: undefined, tables: [], chats: { room: [], table: [] }, lobbyOptions: undefined, game: undefined, prompt: undefined, waiting: false, server: undefined, clientVersion: undefined, serverVersion: undefined });
+      set({ status: 'offline', view: 'home', mode: undefined, localServerStarting: false, table: undefined, tables: [], chats: { room: [], table: [] }, lobbyOptions: undefined, game: undefined, prompt: undefined, waiting: false, server: undefined, clientVersion: undefined, serverVersion: undefined, deckBuild: undefined, userRequests: [] });
     },
 
     startGame: (format, deck, opponents, aiSkill) => {
@@ -358,10 +369,11 @@ export const useStore = create<State>((set, get) => {
 
     setHovered: (id) => set({ hovered: id }),
     dismissToast: () => set({ toast: undefined }),
+    dismissResult: () => set({ result: undefined, gameOver: undefined }),
     leaveGame: () => {
       // o gateway sai da partida (ou só da mesa, se ela já acabou); sem isso ele reabriria o jogo ao reconectar
       get().send({ t: 'quit' });
-      set({ status: 'online', view: 'home', game: undefined, prompt: undefined, result: undefined, gameOver: undefined, waiting: false, table: undefined });
+      set({ status: 'online', view: 'home', game: undefined, prompt: undefined, result: undefined, gameOver: undefined, waiting: false, table: undefined, deckBuild: undefined });
     },
 
     createTable: (opts) => {

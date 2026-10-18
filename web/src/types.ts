@@ -158,6 +158,11 @@ export type Player = {
 export type UserRequestButton = { text: string; action: string | null };
 export type UserRequest = { id: string; title: string; message: string; buttons: UserRequestButton[] };
 
+/** carta da montagem de deck (sideboard / limitado) */
+export type BuildCard = { id: string; set: string; num: string; name?: string; type?: string; types?: string[]; cost?: string; mv?: number; colors?: string[] };
+/** sideboard: entre os jogos; constructSideboard: sideboard de torneio limitado; construct: montar o deck do pool */
+export type DeckBuild = { tableId: string; mode: 'sideboard' | 'constructSideboard' | 'construct'; time: number; name: string; main: BuildCard[]; side: BuildCard[]; basics: boolean };
+
 /** carta conhecida só por set/número (mãos reveladas por permissão) */
 export type SimpleCard = { id: string; set: string; num: string };
 
@@ -283,7 +288,7 @@ export type ServerMsg =
   | { t: 'gameStarted'; gameId: string; playerId: string }
   | { t: 'game'; method: string; game?: Game; prompt?: Prompt }
   | { t: 'gameOver'; message: string }
-  | { t: 'endGame'; won: boolean; title: string; info: string }
+  | { t: 'endGame'; won: boolean; title: string; info: string; extra?: string; matchOver?: boolean; wins?: number; winsNeeded?: number }
   | { t: 'chat'; chat?: ChatKind; message: string; turnInfo?: string; username?: string; type: string }
   | ({ t: 'lobbyOptions' } & LobbyOptions)
   | { t: 'tables'; tables: LobbyTable[] }
@@ -295,6 +300,8 @@ export type ServerMsg =
   | { t: 'gameError'; message: string }
   | { t: 'serverMessage'; message: string }
   | { t: 'userMessage'; lines: string[] }
+  | { t: 'deckBuild'; build: DeckBuild }
+  | { t: 'deckBuildDone' }
   | { t: 'userRequest'; id: string; title: string; message: string; buttons: UserRequestButton[] }
   | { t: 'event'; method: string }
   | { t: 'cards'; reqId?: string; status: string; result: { total: number; offset: number; cards: CatalogCard[] } }

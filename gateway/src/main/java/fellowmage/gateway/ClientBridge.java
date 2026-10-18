@@ -15,6 +15,7 @@ import mage.constants.SkillLevel;
 import mage.game.match.MatchOptions;
 import mage.interfaces.MageClient;
 import mage.interfaces.callback.ClientCallback;
+import mage.interfaces.callback.ClientCallbackMethod;
 import mage.players.PlayerType;
 import mage.players.net.SkipPrioritySteps;
 import mage.players.net.UserData;
@@ -117,6 +118,8 @@ public final class ClientBridge implements MageClient {
     private final java.util.Deque<String> chatHistory = new java.util.concurrent.ConcurrentLinkedDeque<>();
     // pedidos do servidor aguardando o clique do jogador (id enviado ao navegador -> mensagem original)
     private final Map<String, UserRequestMessage> userRequests = new java.util.concurrent.ConcurrentHashMap<>();
+    // deck aguardando montagem (sideboard / limitado); reenviado se o navegador reconectar
+    private volatile DeckBuilding deckBuilding;
 
     private final CardCatalog catalog;
     private final DeckService deckService;
@@ -217,6 +220,14 @@ public final class ClientBridge implements MageClient {
                 if (session != null && session.isConnected()) {
                     leaveCurrentTable();
                 }
+                return;
+            case "submitDeck":
+                requireSession();
+                submitBuiltDeck(cmd, true);
+                return;
+            case "updateDeck":
+                requireSession();
+                submitBuiltDeck(cmd, false);
                 return;
             case "userReply":
                 requireSession();
@@ -552,6 +563,7 @@ public final class ClientBridge implements MageClient {
         }
         currentTableId = null;
         currentDeck = null;
+        deckBuilding = null;
     }
 
     private void requireSession() {
@@ -743,6 +755,7 @@ public final class ClientBridge implements MageClient {
                     .with("clientVersion", VERSION.toString()).with("serverVersion", session == null ? null : session.getVersionInfo())
                     .with("stops", stopsToJson()).with("resumed", true).with("inGame", gameId != null));
             send(msg("decks").with("decks", decks.list()));
+            sendDeckBuilding();
             if (gameId != null) {
                 // sendRaw: não passar por remember(), que limparia o estado guardado
                 sendRaw(GSON.toJson(msg("gameStarted").with("gameId", gameId).with("playerId", playerId).body));
@@ -860,7 +873,12 @@ public final class ClientBridge implements MageClient {
             }
             case END_GAME_INFO: {
                 GameEndView v = (GameEndView) data;
-                send(msg("endGame").with("won", v.hasWon()).with("title", v.getGameInfo()).with("info", v.getMatchInfo()));
+                // a partida segue (melhor de N) enquanto não há vencedor: o GameEndView monta então
+                // "You need N more wins..." em vez de "<nome> won the match!"
+                boolean matchOver = v.getMatchInfo() == null || !v.getMatchInfo().startsWith("You need ");
+                send(msg("endGame").with("won", v.hasWon()).with("title", v.getGameInfo()).with("info", v.getMatchInfo())
+                        .with("extra", v.getAdditionalInfo()).with("matchOver", matchOver)
+                        .with("wins", v.getWins()).with("winsNeeded", v.getWinsNeeded()));
                 break;
             }
             case CHATMESSAGE: {
@@ -888,20 +906,49 @@ public final class ClientBridge implements MageClient {
                         .with("buttons", buttons));
                 break;
             }
-            case SIDEBOARD: {
+            case SIDEBOARD:
+            case CONSTRUCT: {
+                // entre os jogos (sideboard) ou no limitado (montar o deck do pool): o navegador abre o editor
                 TableClientMessage m = (TableClientMessage) data;
-                if (!m.getFlag() && currentDeck != null) {
-                    // sideboard entre os jogos de uma partida melhor de N: ainda sem editor, mantém o deck
-                    session.submitDeck(m.getCurrentTableId(), currentDeck);
-                    send(msg("serverMessage").with("message", "Entre os jogos: o deck foi mantido sem trocas de sideboard."));
-                } else {
-                    sendError("Montagem de deck limitado ainda não é suportada no FellowMage.");
-                }
+                String mode = callback.getMethod() == ClientCallbackMethod.CONSTRUCT ? "construct"
+                        : m.getFlag() ? "constructSideboard" : "sideboard";
+                deckBuilding = new DeckBuilding(m.getCurrentTableId(), mode, m.getTime(), m.getDeck());
+                sendDeckBuilding();
                 break;
             }
             default:
                 // JOINED_TABLE, torneios, draft etc.: ainda não suportados no cliente web
                 send(msg("event").with("method", callback.getMethod().name()));
+        }
+    }
+
+    private void sendDeckBuilding() {
+        DeckBuilding b = deckBuilding;
+        if (b != null) {
+            send(msg("deckBuild").with("build", b.toJson(catalog)));
+        }
+    }
+
+    /** Envia o deck montado: "submit" encerra a montagem; "update" só guarda (vale se o tempo acabar). */
+    private void submitBuiltDeck(JsonObject cmd, boolean finalSubmit) {
+        DeckBuilding b = deckBuilding;
+        if (b == null) {
+            return;
+        }
+        DeckCardLists deck = b.toDeck(cmd, catalog);
+        if (!finalSubmit) {
+            session.updateDeck(b.tableId, deck);
+            return;
+        }
+        lastServerError = null;
+        if (session.submitDeck(b.tableId, deck)) {
+            deckBuilding = null;
+            if ("sideboard".equals(b.mode)) {
+                currentDeck = deck; // próximo sideboard parte do deck atual
+            }
+            send(msg("deckBuildDone"));
+        } else if (lastServerError == null) {
+            sendError("O servidor recusou o deck. " + session.getLastError());
         }
     }
 
