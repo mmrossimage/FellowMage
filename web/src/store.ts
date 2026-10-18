@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { loadTableBg, saveTableBg, type TableBg } from './tableBg';
 import { sessionSet } from './util';
 import type { ChatKind, CreateTableOptions, DeckSummary, FormatId, Game, LobbyOptions, LobbyTable, Prompt, ServerMsg, StopKey, Stops, UserRequest, DeckBuild, RoomUser, FinishedMatch, TournamentInfo, DraftState, CreateTournamentOptions } from './types';
 
@@ -106,6 +107,12 @@ type State = {
   setHovered: (id?: string) => void;
   /** carta citada num texto (log, chat, pedido) sob o mouse: id do objeto e nome para buscar a imagem */
   hoveredRef?: { id: string; name: string };
+  /** fundo da mesa (preferência deste navegador) */
+  tableBg: TableBg;
+  setTableBg: (bg: TableBg) => void;
+  /** tela de escolha do fundo aberta */
+  tableBgOpen: boolean;
+  setTableBgOpen: (open: boolean) => void;
   setHoveredRef: (ref?: { id: string; name: string }) => void;
   dismissToast: () => void;
   leaveGame: () => void;
@@ -440,6 +447,13 @@ export const useStore = create<State>((set, get) => {
     setHovered: (id) => set({ hovered: id }),
     // o id também vai para `hovered`: se o objeto está na mesa, a prévia normal (e as setas) o mostram
     setHoveredRef: (ref) => set({ hoveredRef: ref, hovered: ref?.id }),
+    tableBg: loadTableBg(),
+    setTableBg: (bg) => {
+      saveTableBg(bg);
+      set({ tableBg: bg });
+    },
+    tableBgOpen: false,
+    setTableBgOpen: (open) => set({ tableBgOpen: open }),
     dismissToast: () => set({ toast: undefined }),
     dismissResult: () => set({ result: undefined, gameOver: undefined }),
     leaveGame: () => {

@@ -47,6 +47,7 @@ export function GameMenu() {
   const prefs = useStore((s) => s.gamePrefs);
   const setPref = useStore((s) => s.setGamePref);
   const leaveGame = useStore((s) => s.leaveGame);
+  const setTableBgOpen = useStore((s) => s.setTableBgOpen);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -131,6 +132,9 @@ export function GameMenu() {
                   ))}
                   <Check checked={prefs.allowHandRequests} onClick={toggle('allowHandRequests')}>Aceitar pedidos para ver minha mão</Check>
                   <Item onClick={run(() => action('REVOKE_PERMISSIONS_TO_SEE_HAND_CARDS'))}>Revogar quem já pode ver minha mão</Item>
+                </Section>
+                <Section title="Aparência">
+                  <Item onClick={run(() => setTableBgOpen(true))}>Fundo da mesa…</Item>
                 </Section>
                 <Section title="Conceder">
                   <Item onClick={run(() => confirm('Conceder este jogo?') && action('CONCEDE'))}>Este jogo</Item>

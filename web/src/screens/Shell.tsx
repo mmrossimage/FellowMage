@@ -16,6 +16,7 @@ const NAV: { view: View; label: string; icon: string }[] = [
 export function Shell() {
   const view = useStore((s) => s.view);
   const navigate = useStore((s) => s.navigate);
+  const setTableBgOpen = useStore((s) => s.setTableBgOpen);
   const disconnect = useStore((s) => s.disconnect);
   const user = useStore((s) => s.user);
   const server = useStore((s) => s.server);
@@ -43,7 +44,15 @@ export function Shell() {
             <span className="relative font-medium">{n.label}</span>
           </button>
         ))}
-        <div className="mt-auto px-1 text-center text-[10px] leading-tight text-white/35" title={[server, clientVersion && `Gateway: XMage ${clientVersion}`, serverVersion && `Servidor: ${serverVersion}`].filter(Boolean).join('\n')}>
+        <button
+          onClick={() => setTableBgOpen(true)}
+          title="Fundo da mesa"
+          className="mt-auto flex w-16 flex-col items-center gap-1 rounded-xl py-2 text-[11px] text-white/55 transition hover:bg-white/5 hover:text-white"
+        >
+          <span className="text-xl">🎨</span>
+          <span className="font-medium">Mesa</span>
+        </button>
+        <div className="mt-2 px-1 text-center text-[10px] leading-tight text-white/35" title={[server, clientVersion && `Gateway: XMage ${clientVersion}`, serverVersion && `Servidor: ${serverVersion}`].filter(Boolean).join('\n')}>
           {user}
         </div>
         <button

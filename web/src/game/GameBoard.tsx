@@ -10,6 +10,7 @@ import { Battlefield } from './Battlefield';
 import { CardPreview } from './CardPreview';
 import { ExileZones } from './ExileZones';
 import { GameMenu, useSkipHotkeys } from './GameMenu';
+import { TableBackground } from './TableBackground';
 import { VisibleHands } from './VisibleHands';
 import { seatsFromMe } from './commander';
 import { PromptDialogs } from './Dialogs';
@@ -43,7 +44,8 @@ export function GameBoard() {
 
   return (
     <LayoutGroup>
-      <div className="table-bg relative grid h-full grid-cols-[1fr_minmax(240px,18vw)] grid-rows-[auto_minmax(0,1fr)] overflow-clip">
+      <div className="table-bg relative isolate grid h-full grid-cols-[1fr_minmax(240px,18vw)] grid-rows-[auto_minmax(0,1fr)] overflow-clip">
+        <TableBackground />
         {/* z-40: o backdrop-blur cria um contexto de empilhamento próprio; sem z, os menus do cabeçalho
             (Menu, Paradas) ficam atrás dos painéis do tabuleiro */}
         <header className="relative z-40 col-span-2 flex items-center justify-between gap-4 border-b border-white/5 bg-black/30 px-5 py-1.5 backdrop-blur">

@@ -28,13 +28,15 @@ body {
 }
 
 /* Mesa: "tapete" com anel dourado e vinheta, no espírito do Arena/Phase */
+/* mesa: o fundo em si é personalizável (TableBackground); por cima ficam sempre o anel e a vinheta */
 .table-bg {
+  background: #0a0e18;
+}
+.table-overlay {
   background:
     radial-gradient(ellipse 46% 30% at 50% 52%, transparent 96%, rgba(255, 209, 138, 0.18) 97%, transparent 99%),
     radial-gradient(ellipse 60% 45% at 50% 52%, rgba(255, 209, 138, 0.06), transparent 70%),
-    radial-gradient(ellipse 120% 90% at 50% 50%, transparent 55%, rgba(0, 0, 0, 0.75)),
-    conic-gradient(from 200deg at 50% 50%, #0d1424, #141b2e, #0f1626, #0b1120, #0d1424),
-    #0a0e18;
+    radial-gradient(ellipse 120% 90% at 50% 50%, transparent 55%, rgba(0, 0, 0, 0.75));
 }
 
 @layer components {
