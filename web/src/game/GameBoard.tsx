@@ -24,6 +24,7 @@ export function GameBoard() {
   const result = useStore((s) => s.result);
   const gameOver = useStore((s) => s.gameOver);
   const leaveGame = useStore((s) => s.leaveGame);
+  const replay = useStore((s) => s.replay);
   useSkipHotkeys();
 
   if (!game) {
@@ -59,10 +60,10 @@ export function GameBoard() {
             )}
             {/* saída sempre disponível, como fechar a aba do jogo no cliente oficial (quitMatch) */}
             <button
-              onClick={() => (gameOver || confirm('Sair da partida? Se ela ainda estiver em andamento, você a abandona.')) && leaveGame()}
+              onClick={() => (gameOver || game.watching || replay || confirm('Sair da partida? Se ela ainda estiver em andamento, você a abandona.')) && leaveGame()}
               className="rounded-lg px-3 py-1.5 text-xs text-white/60 ring-1 ring-white/10 hover:bg-white/10 hover:text-white"
             >
-              Sair
+              {replay ? 'Fechar replay' : game.watching ? 'Parar de assistir' : 'Sair'}
             </button>
           </div>
         </header>
@@ -108,9 +109,7 @@ export function GameBoard() {
             <div className="relative h-full min-w-0">
               <Hand />
             </div>
-            <div className="relative z-30">
-              <ActionBar />
-            </div>
+            <div className="relative z-30">{replay ? <ReplayBar /> : <ActionBar />}</div>
           </div>
         </main>
 
@@ -201,6 +200,24 @@ function EliminatedBanner({ me }: { me: Player }) {
         Sair da partida
       </button>
     </motion.div>
+  );
+}
+
+/** Controles do replay gravado no servidor (pnlReplay do cliente oficial). */
+function ReplayBar() {
+  const send = useStore((s) => s.send);
+  const step = (dir: string, moves?: number) => send({ t: 'replayStep', dir, moves });
+  const btn = 'rounded-xl bg-white/10 px-4 py-3 text-lg text-white ring-1 ring-white/15 hover:bg-white/20';
+  return (
+    <div className="flex w-[min(380px,30vw)] flex-col gap-2 rounded-xl border border-arcane-400/30 bg-ink-900/85 p-3 shadow-panel">
+      <div className="text-center font-display text-sm uppercase tracking-wider text-arcane-300">Replay</div>
+      <div className="flex justify-center gap-2">
+        <button onClick={() => step('prev')} className={btn} title="Jogada anterior">◀</button>
+        <button onClick={() => step('next')} className={btn} title="Próxima jogada">▶</button>
+        <button onClick={() => step('skip', 10)} className={btn} title="Avançar 10 jogadas">⏩</button>
+        <button onClick={() => step('stop')} className={btn} title="Encerrar replay">■</button>
+      </div>
+    </div>
   );
 }
 

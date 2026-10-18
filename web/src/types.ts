@@ -277,6 +277,25 @@ export type CreateTableOptions = {
   password: string;
   spectators: boolean;
   deck: string;
+  /** vagas preenchidas por IA (ficam no fim da mesa) */
+  ai?: number;
+  aiSkill?: number;
+  aiDeck?: string;
+};
+
+export type RoomUser = { name: string; flag: string; games: string; ping: string; history: string; quitRatio: number; rating: number };
+export type FinishedMatch = {
+  id: string;
+  name: string;
+  gameType: string;
+  deckType: string;
+  players: string;
+  result: string;
+  start?: number;
+  end?: number;
+  tournament: boolean;
+  replay: boolean;
+  games: string[];
 };
 
 export type ServerMsg =
@@ -285,7 +304,7 @@ export type ServerMsg =
   | { t: 'decks'; decks: string[] }
   | { t: 'stops'; stops: Stops }
   | { t: 'tableReady'; format: string; deck: string; opponents: string[] }
-  | { t: 'gameStarted'; gameId: string; playerId: string }
+  | { t: 'gameStarted'; gameId: string; playerId: string | null; watching?: boolean }
   | { t: 'game'; method: string; game?: Game; prompt?: Prompt }
   | { t: 'gameOver'; message: string }
   | { t: 'endGame'; won: boolean; title: string; info: string; extra?: string; matchOver?: boolean; wins?: number; winsNeeded?: number }
@@ -300,6 +319,12 @@ export type ServerMsg =
   | { t: 'gameError'; message: string }
   | { t: 'serverMessage'; message: string }
   | { t: 'userMessage'; lines: string[] }
+  | { t: 'roomUsers'; users: RoomUser[]; activeGames: number }
+  | { t: 'finishedMatches'; matches: FinishedMatch[] }
+  | { t: 'serverMessages'; messages: string[] }
+  | { t: 'replayStarted'; gameId: string }
+  | { t: 'replayEnd'; message: string }
+  | { t: 'replayDone' }
   | { t: 'deckBuild'; build: DeckBuild }
   | { t: 'deckBuildDone' }
   | { t: 'userRequest'; id: string; title: string; message: string; buttons: UserRequestButton[] }

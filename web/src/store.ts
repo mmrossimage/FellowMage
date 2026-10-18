@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { sessionSet } from './util';
-import type { ChatKind, CreateTableOptions, DeckSummary, FormatId, Game, LobbyOptions, LobbyTable, Prompt, ServerMsg, StopKey, Stops, UserRequest, DeckBuild } from './types';
+import type { ChatKind, CreateTableOptions, DeckSummary, FormatId, Game, LobbyOptions, LobbyTable, Prompt, ServerMsg, StopKey, Stops, UserRequest, DeckBuild, RoomUser, FinishedMatch } from './types';
 
 type Status = 'offline' | 'connecting' | 'online' | 'starting' | 'playing';
 /** telas dentro do app (fora da partida) */
@@ -65,6 +65,12 @@ type State = {
   /** sala de espera: a mesa em que entramos (id já conhecido antes do primeiro tableInfo) */
   table?: { id: string; info?: LobbyTable; owner: boolean };
   chats: Record<'room' | 'table', ChatLine[]>;
+  roomUsers: RoomUser[];
+  finishedMatches: FinishedMatch[];
+  /** avisos do servidor (mensagem do dia) */
+  serverMessages: string[];
+  /** assistindo a um replay gravado no servidor */
+  replay: boolean;
   /** um pedido de criar/entrar em mesa aguardando resposta do servidor */
   tableBusy: boolean;
 
@@ -164,7 +170,25 @@ export const useStore = create<State>((set, get) => {
         break;
       case 'gameStarted':
         // cada jogo começa com as opções padrão no servidor
-        set({ status: 'playing', gameId: m.gameId, playerId: m.playerId, result: undefined, gameOver: undefined, log: [], gamePrefs: DEFAULT_GAME_PREFS });
+        set({ status: 'playing', gameId: m.gameId, playerId: m.playerId ?? undefined, replay: false, table: undefined, result: undefined, gameOver: undefined, log: [], gamePrefs: DEFAULT_GAME_PREFS });
+        break;
+      case 'replayStarted':
+        set({ status: 'playing', gameId: m.gameId, playerId: undefined, replay: true, game: undefined, prompt: undefined, waiting: false, result: undefined, gameOver: undefined, log: [] });
+        break;
+      case 'replayEnd':
+        set({ gameOver: m.message || 'Fim do replay.' });
+        break;
+      case 'replayDone':
+        set({ status: 'online', replay: false, game: undefined, gameOver: undefined });
+        break;
+      case 'roomUsers':
+        set({ roomUsers: m.users });
+        break;
+      case 'finishedMatches':
+        set({ finishedMatches: m.matches });
+        break;
+      case 'serverMessages':
+        set({ serverMessages: m.messages });
         break;
       case 'game': {
         // GAME_UPDATE sem prompt não altera o pedido pendente
@@ -183,6 +207,11 @@ export const useStore = create<State>((set, get) => {
           set((s) => ({
             chats: { ...s.chats, [kind]: [...s.chats[kind].slice(-MAX_CHAT + 1), { id: ++chatSeq, user: m.username, html: m.message, type: m.type }] },
           }));
+          // cochicho recebido longe do lobby (na partida): avisar, senão passa despercebido
+          if (m.type === 'WHISPER_FROM' && get().status === 'playing') {
+            set({ toast: { text: `${m.username} cochichou: ${m.message.replace(/<[^>]*>/g, '')}`, tone: 'info' } });
+            pushLog({ kind: 'chat', html: `<i>(cochicho)</i> ${m.message}`, user: m.username });
+          }
         } else {
           const talk = m.type === 'TALK' || m.type.startsWith('WHISPER');
           pushLog({ kind: talk ? 'chat' : 'game', html: m.message, turnInfo: m.turnInfo, user: talk ? m.username : undefined });
@@ -290,6 +319,10 @@ export const useStore = create<State>((set, get) => {
     tables: [],
     chats: { room: [], table: [] },
     tableBusy: false,
+    roomUsers: [],
+    finishedMatches: [],
+    serverMessages: [],
+    replay: false,
 
     navigate: (view, extra) => set({ view, ...extra }),
 
@@ -373,7 +406,7 @@ export const useStore = create<State>((set, get) => {
     leaveGame: () => {
       // o gateway sai da partida (ou só da mesa, se ela já acabou); sem isso ele reabriria o jogo ao reconectar
       get().send({ t: 'quit' });
-      set({ status: 'online', view: 'home', game: undefined, prompt: undefined, result: undefined, gameOver: undefined, waiting: false, table: undefined, deckBuild: undefined });
+      set({ status: 'online', view: 'home', game: undefined, prompt: undefined, result: undefined, gameOver: undefined, waiting: false, table: undefined, deckBuild: undefined, replay: false });
     },
 
     createTable: (opts) => {

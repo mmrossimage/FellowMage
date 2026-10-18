@@ -16,7 +16,9 @@ export function PhaseTracker() {
   const [panel, setPanel] = useState(false);
   if (!game) return null;
 
-  const myTurn = game.players.find((p) => p.me)?.id === game.activePlayerId;
+  const me = game.players.find((p) => p.me);
+  // espectador não tem jogador próprio: nunca é "seu turno"
+  const myTurn = !!me && me.id === game.activePlayerId;
   const context: keyof Stops = myTurn ? 'yourTurn' : 'opponentTurn';
   const isCurrent = (s: TrackStep) => s.steps.includes(game.step ?? '');
 

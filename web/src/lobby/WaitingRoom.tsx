@@ -54,13 +54,21 @@ export function WaitingRoom() {
             <li key={i} className={cx('flex items-center gap-3 rounded-xl px-4 py-3 ring-1', s.name ? 'bg-white/5 ring-white/10' : 'bg-black/20 ring-white/5')}>
               <span className="w-6 text-center font-display text-white/40">{i + 1}</span>
               {s.name ? (
-                <span className="font-semibold text-white">
+                <span className="flex-1 font-semibold text-white">
                   {s.name}
+                  {s.type && s.type !== 'HUMAN' && <span className="ml-2 rounded bg-white/10 px-1 text-[10px] font-normal uppercase text-white/60">IA</span>}
                   {s.name === info?.owner && <span className="ml-2 text-xs font-normal text-ember-300">dono</span>}
                   {s.name === user && <span className="ml-2 text-xs font-normal text-arcane-300">você</span>}
                 </span>
               ) : (
-                <span className="italic text-white/35">Vaga livre — aguardando…</span>
+                <span className="flex-1 italic text-white/35">{s.type && s.type !== 'HUMAN' ? 'Vaga de IA' : 'Vaga livre — aguardando…'}</span>
+              )}
+              {/* o servidor só troca lugares com a mesa cheia (TableController.swapSeats) */}
+              {table.owner && ready && (
+                <span className="flex gap-1">
+                  <SeatMove disabled={i === 0} onClick={() => send({ t: 'swapSeats', a: i, b: i - 1 })} label="▲" />
+                  <SeatMove disabled={i === (info?.seats.length ?? 0) - 1} onClick={() => send({ t: 'swapSeats', a: i, b: i + 1 })} label="▼" />
+                </span>
               )}
             </li>
           ))}
@@ -94,5 +102,13 @@ export function WaitingRoom() {
 
       <ChatBox title="Chat da mesa" lines={chat} onSend={(text) => sendChat('table', text)} className="w-80 shrink-0" />
     </div>
+  );
+}
+
+function SeatMove({ label, onClick, disabled }: { label: string; onClick: () => void; disabled: boolean }) {
+  return (
+    <button disabled={disabled} onClick={onClick} className="rounded px-2 py-0.5 text-xs text-white/60 ring-1 ring-white/10 hover:bg-white/10 hover:text-white disabled:opacity-20" title="Trocar de lugar">
+      {label}
+    </button>
   );
 }

@@ -30,7 +30,10 @@ import mage.view.GameClientMessage;
 import mage.view.GameEndView;
 import mage.view.GameTypeView;
 import mage.view.GameView;
+import mage.view.MatchView;
+import mage.view.RoomUsersView;
 import mage.view.TableClientMessage;
+import mage.view.UsersView;
 import mage.view.TableView;
 import mage.view.UserRequestMessage;
 import org.java_websocket.WebSocket;
@@ -120,6 +123,9 @@ public final class ClientBridge implements MageClient {
     private final Map<String, UserRequestMessage> userRequests = new java.util.concurrent.ConcurrentHashMap<>();
     // deck aguardando montagem (sideboard / limitado); reenviado se o navegador reconectar
     private volatile DeckBuilding deckBuilding;
+    // assistindo (espectador) a gameId, sem jogador próprio
+    private volatile boolean watching;
+    private volatile UUID replayId;
 
     private final CardCatalog catalog;
     private final DeckService deckService;
@@ -221,6 +227,96 @@ public final class ClientBridge implements MageClient {
                     leaveCurrentTable();
                 }
                 return;
+            case "swapSeats":
+                // dono da mesa reordena os lugares (Move up/down da sala de espera oficial)
+                requireSession();
+                if (currentTableId != null && !session.swapSeats(roomId, currentTableId, cmd.get("a").getAsInt(), cmd.get("b").getAsInt())) {
+                    sendError("Não foi possível trocar os lugares. " + session.getLastError());
+                }
+                sendTableInfo();
+                return;
+            case "watchTable":
+                // o servidor responde com WATCHGAME, tratado em handleCallback
+                requireSession();
+                leaveCurrentTable();
+                if (!session.watchTable(roomId, UUID.fromString(str(cmd, "tableId")))) {
+                    sendError("Não foi possível assistir a esta mesa. " + session.getLastError());
+                }
+                return;
+            case "roomUsers": {
+                requireSession();
+                List<Map<String, Object>> users = new java.util.ArrayList<>();
+                int activeGames = 0;
+                for (RoomUsersView r : session.getRoomUsers(roomId)) {
+                    activeGames = r.getNumberActiveGames();
+                    for (UsersView u : r.getUsersView()) {
+                        Map<String, Object> m = new LinkedHashMap<>();
+                        m.put("name", u.getUserName());
+                        m.put("flag", u.getFlagName());
+                        m.put("games", u.getInfoGames());
+                        m.put("ping", u.getInfoPing());
+                        m.put("history", u.getMatchHistory());
+                        m.put("quitRatio", u.getMatchQuitRatio());
+                        m.put("rating", u.getGeneralRating());
+                        users.add(m);
+                    }
+                }
+                send(msg("roomUsers").with("users", users).with("activeGames", activeGames));
+                return;
+            }
+            case "finishedMatches": {
+                requireSession();
+                List<Map<String, Object>> matches = new java.util.ArrayList<>();
+                for (MatchView v : session.getFinishedMatches(roomId)) {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("id", v.getMatchId());
+                    m.put("name", v.getName());
+                    m.put("gameType", v.getGameType());
+                    m.put("deckType", v.getDeckType());
+                    m.put("players", v.getPlayers());
+                    m.put("result", v.getResult());
+                    m.put("start", v.getStartTime() == null ? null : v.getStartTime().getTime());
+                    m.put("end", v.getEndTime() == null ? null : v.getEndTime().getTime());
+                    m.put("tournament", v.isTournament());
+                    m.put("replay", v.isReplayAvailable());
+                    m.put("games", v.getGames());
+                    matches.add(m);
+                }
+                send(msg("finishedMatches").with("matches", matches));
+                return;
+            }
+            case "serverMessages":
+                requireSession();
+                send(msg("serverMessages").with("messages", session.getServerMessages()));
+                return;
+            case "replay":
+                // replay de jogo gravado no servidor: REPLAY_GAME -> startReplay -> REPLAY_INIT/UPDATE/DONE
+                requireSession();
+                leaveCurrentTable();
+                if (!session.replayGame(UUID.fromString(str(cmd, "gameId")))) {
+                    sendError("Replay indisponível. " + session.getLastError());
+                }
+                return;
+            case "replayStep": {
+                requireSession();
+                UUID id = replayId;
+                if (id == null) {
+                    return;
+                }
+                String dir = str(cmd, "dir");
+                if ("next".equals(dir)) {
+                    session.nextPlay(id);
+                } else if ("prev".equals(dir)) {
+                    session.previousPlay(id);
+                } else if ("skip".equals(dir)) {
+                    session.skipForward(id, cmd.has("moves") ? cmd.get("moves").getAsInt() : 10);
+                } else if ("stop".equals(dir)) {
+                    session.stopReplay(id);
+                    replayId = null;
+                    send(msg("replayDone"));
+                }
+                return;
+            }
             case "submitDeck":
                 requireSession();
                 submitBuiltDeck(cmd, true);
@@ -546,7 +642,16 @@ public final class ClientBridge implements MageClient {
         if (session == null || !session.isConnected()) {
             return;
         }
-        if (gameId != null) {
+        if (replayId != null) {
+            session.stopReplay(replayId);
+            replayId = null;
+        }
+        if (gameId != null && watching) {
+            session.stopWatching(gameId);
+            gameId = null;
+            watching = false;
+            currentTableId = null;
+        } else if (gameId != null) {
             session.quitMatch(gameId);
             gameId = null;
         } else if (currentTableId != null && !currentTableId.equals(ownTableId)) {
@@ -613,8 +718,10 @@ public final class ClientBridge implements MageClient {
 
         String name = str(cmd, "name");
         MatchOptions options = new MatchOptions(name == null || name.trim().isEmpty() ? userName + "'s table" : name.trim(), gameType.getName(), false);
+        // vagas de IA ficam no fim, como escolhidas no NewTableDialog do cliente oficial
+        int aiSeats = cmd.has("ai") ? Math.max(0, Math.min(players - 1, cmd.get("ai").getAsInt())) : 0;
         for (int i = 0; i < players; i++) {
-            options.getPlayerTypes().add(PlayerType.HUMAN);
+            options.getPlayerTypes().add(i < players - aiSeats ? PlayerType.HUMAN : PlayerType.COMPUTER_MAD);
         }
         options.setDeckType(deckType);
         options.setMatchTimeLimit(MatchTimeLimit.valueOf(str(cmd, "timeLimit") == null ? "NONE" : str(cmd, "timeLimit")));
@@ -652,6 +759,16 @@ public final class ClientBridge implements MageClient {
             return;
         }
         ownTableId = table.getTableId();
+        // o dono senta as IAs logo após entrar (o cliente oficial faz o mesmo ao criar a mesa)
+        String aiDeckPath = str(cmd, "aiDeck");
+        DeckCardLists aiDeck = aiDeckPath == null ? deck : decks.load(aiDeckPath);
+        int aiSkill = cmd.has("aiSkill") ? cmd.get("aiSkill").getAsInt() : 6;
+        for (int i = 1; i <= aiSeats; i++) {
+            if (!session.joinTable(roomId, table.getTableId(), "IA " + i, PlayerType.COMPUTER_MAD, aiSkill, aiDeck, password)) {
+                sendError("O servidor não aceitou a IA " + i + ". " + session.getLastError());
+                break;
+            }
+        }
         enterTable(table.getTableId(), deck);
     }
 
@@ -758,7 +875,7 @@ public final class ClientBridge implements MageClient {
             sendDeckBuilding();
             if (gameId != null) {
                 // sendRaw: não passar por remember(), que limparia o estado guardado
-                sendRaw(GSON.toJson(msg("gameStarted").with("gameId", gameId).with("playerId", playerId).body));
+                sendRaw(GSON.toJson(msg("gameStarted").with("gameId", gameId).with("playerId", playerId).with("watching", watching).body));
                 chatHistory.forEach(this::sendRaw);
                 if (lastGameJson != null) {
                     sendRaw(lastGameJson);
@@ -807,12 +924,37 @@ public final class ClientBridge implements MageClient {
                 TableClientMessage m = (TableClientMessage) data;
                 gameId = m.getGameId();
                 playerId = m.getPlayerId();
+                watching = false;
                 session.joinGame(gameId);
                 // o log da partida chega como mensagens do chat do jogo
                 session.getGameChatId(gameId).ifPresent(session::joinChat);
                 send(msg("gameStarted").with("gameId", gameId).with("playerId", playerId));
                 break;
             }
+            case WATCHGAME: {
+                // espectador: mesmo tabuleiro, sem jogador próprio (GamePanel.watchGame no cliente oficial)
+                TableClientMessage m = (TableClientMessage) data;
+                gameId = callback.getObjectId();
+                playerId = null;
+                watching = true;
+                currentTableId = m.getCurrentTableId();
+                session.watchGame(gameId);
+                session.getGameChatId(gameId).ifPresent(session::joinChat);
+                send(msg("gameStarted").with("gameId", gameId).with("playerId", null).with("watching", true));
+                break;
+            }
+            case REPLAY_GAME:
+                replayId = callback.getObjectId();
+                session.startReplay(replayId);
+                send(msg("replayStarted").with("gameId", replayId));
+                break;
+            case REPLAY_INIT:
+            case REPLAY_UPDATE:
+                sendGame(callback.getMethod().name(), (GameView) data, null);
+                break;
+            case REPLAY_DONE:
+                send(msg("replayEnd").with("message", String.valueOf(data)));
+                break;
             case GAME_INIT:
             case GAME_UPDATE:
                 sendGame(callback.getMethod().name(), (GameView) data, null);
@@ -867,6 +1009,7 @@ public final class ClientBridge implements MageClient {
                 // o servidor já removeu nossa sessão de jogo (GameController.endGame): esquecer a partida,
                 // senão uma reconexão do navegador reabre um tabuleiro que ninguém mais atualiza
                 gameId = null;
+                watching = false;
                 String text = data instanceof GameClientMessage ? ((GameClientMessage) data).getMessage() : String.valueOf(data);
                 send(msg("gameOver").with("message", text));
                 break;

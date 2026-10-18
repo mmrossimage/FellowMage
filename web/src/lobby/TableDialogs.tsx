@@ -169,7 +169,7 @@ export function CreateTableDialog({ onClose }: { onClose: () => void }) {
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          const final = { ...o, players };
+          const final = { ...o, players, ai: Math.min(o.ai ?? 0, players - 1) };
           lsSet(LAST_DECK, final.deck);
           lsSet(LAST_TABLE, JSON.stringify({ ...final, name: undefined, password: undefined, deck: undefined }));
           createTable(final);
@@ -241,6 +241,22 @@ export function CreateTableDialog({ onClose }: { onClose: () => void }) {
                 <input type="checkbox" checked={o.spectators} onChange={(e) => set('spectators', e.target.checked)} />
                 Permitir espectadores
               </label>
+              <Field label="Partida">
+                <select value={o.wins} onChange={(e) => set('wins', Number(e.target.value))} className="input">
+                  <option value={1}>Jogo único</option>
+                  <option value={2}>Melhor de 3</option>
+                  <option value={3}>Melhor de 5</option>
+                </select>
+              </Field>
+              <Field label="Vagas para a IA (usa o seu deck)">
+                <select value={Math.min(o.ai ?? 0, players - 1)} onChange={(e) => set('ai', Number(e.target.value))} className="input">
+                  {Array.from({ length: players }, (_, n) => (
+                    <option key={n} value={n}>
+                      {n === 0 ? 'Nenhuma' : `${n} IA${n > 1 ? 's' : ''}`}
+                    </option>
+                  ))}
+                </select>
+              </Field>
             </div>
 
             <div className="mt-5">

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../store';
 import type { LobbyTable } from '../types';
 import { cx } from '../util';
-import { ChatBox } from './ChatBox';
+import { LobbySide, ServerNews } from './LobbySide';
 import { CreateTableDialog, JoinTableDialog } from './TableDialogs';
 import { SKILL_LABEL, TABLE_STATE, ago, canJoin, filledSeats } from './tables';
 
@@ -15,9 +15,7 @@ export function OnlineLobby() {
   const user = useStore((s) => s.user);
   const server = useStore((s) => s.server);
   const serverVersion = useStore((s) => s.serverVersion);
-  const roomChat = useStore((s) => s.chats.room);
   const send = useStore((s) => s.send);
-  const sendChat = useStore((s) => s.sendChat);
 
   const [search, setSearch] = useState('');
   const [onlyOpen, setOnlyOpen] = useState(true);
@@ -62,6 +60,8 @@ export function OnlineLobby() {
           </button>
         </div>
 
+        <ServerNews />
+
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por mesa, jogador ou formato…" className="input max-w-xs" />
           <select value={deckType} onChange={(e) => setDeckType(e.target.value)} className="input w-auto">
@@ -88,7 +88,7 @@ export function OnlineLobby() {
         </div>
       </section>
 
-      <ChatBox title="Chat do servidor" lines={roomChat} onSend={(text) => sendChat('room', text)} className="w-80 shrink-0" />
+      <LobbySide className="w-80 shrink-0" />
 
       {joining && <JoinTableDialog table={joining} onClose={() => setJoining(undefined)} />}
       {creating && <CreateTableDialog onClose={() => setCreating(false)} />}
@@ -97,8 +97,11 @@ export function OnlineLobby() {
 }
 
 function TableRow({ table: t, onJoin }: { table: LobbyTable; onJoin: () => void }) {
+  const send = useStore((s) => s.send);
   const open = canJoin(t);
   const players = t.seats.filter((s) => s.name).map((s) => s.name);
+  // mesa em jogo que aceita espectadores (o servidor recusa as demais)
+  const watchable = t.spectators && !t.tournament && (t.state === 'DUELING' || t.state === 'SIDEBOARDING');
   return (
     <div className={cx('flex items-center gap-4 rounded-xl border px-4 py-3 transition', open ? 'border-ember-400/25 bg-ember-500/5' : 'border-white/5 bg-black/20')}>
       <div className="w-14 shrink-0 text-center">
@@ -125,6 +128,15 @@ function TableRow({ table: t, onJoin }: { table: LobbyTable; onJoin: () => void 
         <div className={cx(open ? 'text-ember-300' : 'text-white/50')}>{t.state ? (TABLE_STATE[t.state] ?? t.stateText) : t.stateText}</div>
         <div className="text-white/35">{ago(t.created)}</div>
       </div>
+      {watchable && (
+        <button
+          onClick={() => send({ t: 'watchTable', tableId: t.id })}
+          className="shrink-0 rounded-lg px-3 py-2 text-sm text-arcane-300 ring-1 ring-arcane-400/30 transition hover:bg-arcane-400/10"
+          title="Assistir como espectador"
+        >
+          👁 Assistir
+        </button>
+      )}
       <button
         disabled={!open}
         onClick={onJoin}
