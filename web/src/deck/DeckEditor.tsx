@@ -275,7 +275,7 @@ function Preview({ card }: { card?: CatalogCard }) {
           <div className="mt-2 rounded-xl bg-ink-900/95 p-3 text-xs leading-relaxed text-white/85 ring-1 ring-white/10">
             <div className="mb-1 font-semibold text-white">{card.type}</div>
             {card.rules.slice(0, 6).map((r, i) => (
-              <p key={i} className="mb-1" dangerouslySetInnerHTML={{ __html: rulesToHtml(r) }} />
+              <p key={i} className="mb-1" dangerouslySetInnerHTML={{ __html: rulesToHtml(r, card.name) }} />
             ))}
             {card.unknown && <p className="text-blood-400">O XMage não conhece esta carta.</p>}
           </div>

@@ -47,7 +47,7 @@ export function StackPanel() {
                     <CardFace card={c} size="small" overlays={false} className={cx('w-14 shrink-0', hl && HIGHLIGHT_CLASS[hl])} />
                     <div className="min-w-0 text-xs">
                       <div className="truncate font-semibold text-white">{c.ability ? c.sourceName ?? c.name : c.name}</div>
-                      <div className="line-clamp-3 text-white/60" dangerouslySetInnerHTML={{ __html: rulesToHtml(c.rules[0] ?? c.type) }} />
+                      <div className="line-clamp-3 text-white/60" dangerouslySetInnerHTML={{ __html: rulesToHtml(c.rules[0] ?? c.type, c.sourceName ?? c.name) }} />
                     </div>
                   </motion.div>
                 );

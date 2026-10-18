@@ -54,14 +54,26 @@ export function manaSymbols(cost: string | undefined): string[] {
 
 export const symbolUrl = (sym: string) => `https://svgs.scryfall.io/card-symbols/${sym}.svg`;
 
-/** Substitui {T}, {R} etc. no texto das regras por <img> dos símbolos. */
-export function rulesToHtml(rule: string): string {
+// símbolos que existem como imagem (mana, {T}, {Q}, {E}, híbridos, phyrexianos...)
+const SYMBOL = /^[0-9WUBRGCSXYZTQEPH½∞]+$/i;
+
+/**
+ * Substitui {T}, {R} etc. no texto das regras por <img> dos símbolos. {this} e {source} viram o nome
+ * da carta e o que não é símbolo fica como texto, como no TextboxRuleParser do cliente oficial.
+ */
+export function rulesToHtml(rule: string, cardName?: string): string {
   // o XMage manda "&bull" (sem ";") antes de cada modo de "Choose one —"
   const decoded = rule.replace(/&bull;?/g, '•');
-  return sanitizeHtml(decoded).replace(
-    /\{([^}]+)\}/g,
-    (_, s: string) => `<img src="${symbolUrl(s.replace('/', '').toUpperCase())}" alt="{${s}}" class="inline h-[1em] w-[1em] align-[-0.12em] mx-[1px]" />`,
-  );
+  return sanitizeHtml(decoded).replace(/\{([^}]+)\}/g, (whole, s: string) => {
+    if (s === 'this' || s === 'source') return cardName ? escapeHtml(cardName) : 'esta carta';
+    const code = s.replace('/', '').toUpperCase();
+    if (!SYMBOL.test(code)) return whole;
+    return `<img src="${symbolUrl(code)}" alt="{${s}}" class="inline h-[1em] w-[1em] align-[-0.12em] mx-[1px]" />`;
+  });
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 export const STEP_LABEL: Record<string, string> = {

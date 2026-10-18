@@ -40,16 +40,17 @@ export function CardRefPreview() {
   return (
     <AnimatePresence>
       {ref && !inGame && name && (
-        <motion.aside
+        // mesmo lugar da prévia do tabuleiro: centro da tela, sem capturar o mouse
+        <motion.div
           key={ref.id}
-          initial={{ opacity: 0, x: -16 }}
-          animate={{ opacity: 1, x: 0 }}
+          initial={{ opacity: 0, scale: 0.96 }}
+          animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.12 }}
-          className="pointer-events-none fixed left-4 top-[13%] z-[80] w-[min(280px,20vw,42vh)]"
+          className="pointer-events-none fixed inset-0 z-[80] flex items-center justify-center"
         >
-          <CardArt card={{ name }} size="large" className="shadow-[0_20px_60px_rgba(0,0,0,.8)]" />
-        </motion.aside>
+          <CardArt card={{ name }} size="large" className="w-[min(320px,24vw,48vh)] shadow-[0_20px_60px_rgba(0,0,0,.8)]" />
+        </motion.div>
       )}
     </AnimatePresence>
   );
