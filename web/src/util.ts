@@ -110,3 +110,20 @@ export const PHASE_TRACK: { key: string; label: string; steps: TrackStep[] }[] =
 export function cx(...parts: (string | false | null | undefined)[]) {
   return parts.filter(Boolean).join(' ');
 }
+
+/** sessionStorage tolerante a falhas (aba privada, armazenamento bloqueado) */
+export function sessionGet(key: string) {
+  try {
+    return sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+export function sessionSet(key: string, value: string | null) {
+  try {
+    if (value === null) sessionStorage.removeItem(key);
+    else sessionStorage.setItem(key, value);
+  } catch {
+    /* sem armazenamento: só não retoma ao recarregar */
+  }
+}

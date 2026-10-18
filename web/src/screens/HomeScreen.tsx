@@ -7,6 +7,7 @@ export function HomeScreen() {
   const user = useStore((s) => s.user);
   const userDecks = useStore((s) => s.userDecks);
   const navigate = useStore((s) => s.navigate);
+  const mode = useStore((s) => s.mode);
 
   return (
     <div className="h-full overflow-y-auto">
@@ -22,8 +23,8 @@ export function HomeScreen() {
 
           <div className="mt-8 grid max-w-4xl grid-cols-3 gap-4">
             <BigAction
-              title="Jogar Commander"
-              desc="Você contra 3 IAs"
+              title={mode === 'online' ? 'Jogar online' : 'Jogar Commander'}
+              desc={mode === 'online' ? 'Mesas de outros jogadores' : 'Você contra 3 IAs'}
               icon="⚔️"
               primary
               onClick={() => navigate('play')}

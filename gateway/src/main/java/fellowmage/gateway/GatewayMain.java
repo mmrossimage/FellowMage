@@ -17,6 +17,7 @@ import java.util.Map;
  *   --cards-db=ARQ         banco H2 de cartas do servidor, sem ".mv.db"
  *   --web=DIR              serve o cliente web compilado (pacote distribuído; sem Node)
  *   --http-port=5173       porta HTTP do cliente web (com --web)
+ *   --local-server=ARQ     script PowerShell que inicia o servidor XMage local (modo contra a IA)
  * </pre>
  * Por compatibilidade, os dois primeiros argumentos posicionais ainda são porta e pasta de exemplos.
  */
@@ -41,6 +42,10 @@ public final class GatewayMain {
         Path samples = Paths.get(opt.getOrDefault("samples", "../Xmage/xmage/mage-client/sample-decks"));
         Path userDecks = Paths.get(opt.getOrDefault("decks", "../decks"));
         Path cardsDb = Paths.get(opt.getOrDefault("cards-db", "../mage-src/Mage.Server/db/cards.h2"));
+
+        if (opt.containsKey("local-server")) {
+            LocalServer.configure(Paths.get(opt.get("local-server")).toAbsolutePath().normalize());
+        }
 
         Files.createDirectories(userDecks);
         DeckLibrary decks = new DeckLibrary(samples.toAbsolutePath().normalize(), userDecks.toAbsolutePath().normalize());

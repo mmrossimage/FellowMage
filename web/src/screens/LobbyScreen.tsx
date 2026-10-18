@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import { useMemo, useState } from 'react';
+import { OnlineLobby } from '../lobby/OnlineLobby';
 import { useStore } from '../store';
 import type { FormatId } from '../types';
 import { cx } from '../util';
@@ -32,6 +33,7 @@ export function LobbyScreen() {
   const serverVersion = useStore((s) => s.serverVersion);
   const status = useStore((s) => s.status);
   const startGame = useStore((s) => s.startGame);
+  const mode = useStore((s) => s.mode);
 
   const playDeck = useStore((s) => s.playDeck);
   const [formatId, setFormatId] = useState<FormatId>('commander');
@@ -53,6 +55,8 @@ export function LobbyScreen() {
     setDeck(RANDOM);
     setOpponentDecks([RANDOM, RANDOM, RANDOM]);
   };
+
+  if (mode === 'online') return <OnlineLobby />;
 
   return (
     <div className="flex h-full items-center justify-center overflow-auto p-6">
@@ -169,7 +173,21 @@ export function LobbyScreen() {
   );
 }
 
-function DeckPicker({ title, decks, value, onChange }: { title: string; decks: string[]; value: string; onChange: (v: string) => void }) {
+export function DeckPicker({
+  title,
+  decks,
+  value,
+  onChange,
+  allowRandom = true,
+  heightClass = 'h-64',
+}: {
+  title: string;
+  decks: string[];
+  value: string;
+  onChange: (v: string) => void;
+  allowRandom?: boolean;
+  heightClass?: string;
+}) {
   const [filter, setFilter] = useState('');
   const shown = useMemo(() => {
     const f = filter.toLowerCase();
@@ -180,8 +198,8 @@ function DeckPicker({ title, decks, value, onChange }: { title: string; decks: s
     <div>
       <div className="mb-2 text-xs uppercase tracking-wider text-white/50">{title}</div>
       <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder={`Buscar entre ${decks.length} decks…`} className="input mb-2" />
-      <div className="h-64 overflow-y-auto rounded-xl bg-black/30 p-1 ring-1 ring-white/10">
-        <DeckRow label="🎲 Aleatório" active={value === RANDOM} onClick={() => onChange(RANDOM)} />
+      <div className={cx(heightClass, 'overflow-y-auto rounded-xl bg-black/30 p-1 ring-1 ring-white/10')}>
+        {allowRandom && <DeckRow label="🎲 Aleatório" active={value === RANDOM} onClick={() => onChange(RANDOM)} />}
         {shown.map((d) => {
           const l = deckLabel(d);
           return <DeckRow key={d} label={l.name} folder={l.folder.replace(/^Commander( \/ )?/, '')} active={value === d} onClick={() => onChange(d)} />;
@@ -194,6 +212,7 @@ function DeckPicker({ title, decks, value, onChange }: { title: string; decks: s
 function DeckRow({ label, folder, active, onClick }: { label: string; folder?: string; active: boolean; onClick: () => void }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       className={cx('flex w-full items-baseline justify-between gap-2 rounded-lg px-3 py-1.5 text-left text-sm transition', active ? 'bg-ember-500/25 text-white' : 'text-white/75 hover:bg-white/5')}
     >

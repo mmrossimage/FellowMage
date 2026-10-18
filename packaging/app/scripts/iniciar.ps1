@@ -1,4 +1,5 @@
-# FellowMage (pacote): inicia o servidor XMage e o gateway com o Java embutido e abre o navegador.
+# FellowMage (pacote): inicia o gateway com o Java embutido e abre o navegador.
+# O servidor XMage local só sobe quando o jogador escolhe jogar contra a IA (scripts\servidor-local.ps1).
 param([switch]$SemNavegador)
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $PSScriptRoot
@@ -38,17 +39,6 @@ Write-Host ''
 try {
     $common = @('--add-opens=java.base/java.io=ALL-UNNAMED')
 
-    if (Test-Port 17171) {
-        Write-Host '  Servidor XMage ja esta rodando.' -ForegroundColor DarkGray
-    } else {
-        $first = -not (Test-Path (Join-Path $Root 'server\db\cards.h2.mv.db'))
-        Write-Host ('  Iniciando o servidor XMage' + $(if ($first) { ' (primeira vez: criando o banco de cartas, pode levar alguns minutos)' } else { '' })) -NoNewline
-        Start-Process -FilePath $Java -WorkingDirectory (Join-Path $Root 'server') -WindowStyle Hidden `
-            -ArgumentList ($common + @('-Xmx1536m', '-jar', 'lib\mage-server-1.4.62.jar')) `
-            -RedirectStandardOutput (Join-Path $Logs 'servidor.log') -RedirectStandardError (Join-Path $Logs 'servidor-erros.log')
-        Wait-Port 'O servidor XMage' 17171 900 (Join-Path $Logs 'servidor.log')
-    }
-
     if (Test-Port 8090) {
         Write-Host '  Gateway ja esta rodando.' -ForegroundColor DarkGray
     } else {
@@ -57,7 +47,7 @@ try {
         Start-Process -FilePath $Java -WorkingDirectory $Root -WindowStyle Hidden `
             -ArgumentList ($common + @('-Xmx768m', '-cp', "`"$cp`"", 'fellowmage.gateway.GatewayMain',
                 '--port=8090', '--samples=sample-decks', '--decks=decks', '--cards-db=server\db\cards.h2',
-                '--web=web', '--http-port=5173')) `
+                '--web=web', '--http-port=5173', '--local-server=scripts\servidor-local.ps1')) `
             -RedirectStandardOutput (Join-Path $Logs 'gateway.log') -RedirectStandardError (Join-Path $Logs 'gateway-erros.log')
         Wait-Port 'O FellowMage' 5173 120 (Join-Path $Logs 'gateway-erros.log')
     }
