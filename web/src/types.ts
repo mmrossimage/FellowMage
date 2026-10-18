@@ -205,6 +205,51 @@ export type Prompt = {
   abilities?: Record<string, string>;
 };
 
+/** Mesa do lobby online, como o servidor XMage a descreve. */
+export type LobbySeat = { name: string; type: string | null; flag?: string };
+export type LobbyTable = {
+  id: string;
+  name: string;
+  owner: string;
+  gameType: string;
+  deckType: string;
+  /** WAITING, READY_TO_START, STARTING, DUELING, SIDEBOARDING, FINISHED… */
+  state: string | null;
+  stateText: string;
+  info?: string;
+  created: number | null;
+  passworded: boolean;
+  rated: boolean;
+  tournament: boolean;
+  limited: boolean;
+  spectators: boolean;
+  skill: string | null;
+  quitRatio: string;
+  minRating: string;
+  seats: LobbySeat[];
+};
+export type GameTypeOption = { name: string; minPlayers: number; maxPlayers: number; useRange: boolean; useAttackOption: boolean };
+export type LobbyOptions = {
+  gameTypes: GameTypeOption[];
+  deckTypes: string[];
+  timeLimits: { id: string; minutes: number }[];
+  skillLevels: string[];
+};
+/** chat geral da sala, da mesa (sala de espera) ou da partida */
+export type ChatKind = 'room' | 'table' | 'game';
+export type CreateTableOptions = {
+  name: string;
+  gameType: string;
+  deckType: string;
+  players: number;
+  timeLimit: string;
+  skill: string;
+  wins: number;
+  password: string;
+  spectators: boolean;
+  deck: string;
+};
+
 export type ServerMsg =
   | { t: 'connected'; user: string; server: string; clientVersion?: string; serverVersion?: string | null; stops: Stops }
   | { t: 'disconnected' }
@@ -215,7 +260,12 @@ export type ServerMsg =
   | { t: 'game'; method: string; game?: Game; prompt?: Prompt }
   | { t: 'gameOver'; message: string }
   | { t: 'endGame'; won: boolean; title: string; info: string }
-  | { t: 'chat'; message: string; turnInfo?: string; username?: string; type: string }
+  | { t: 'chat'; chat?: ChatKind; message: string; turnInfo?: string; username?: string; type: string }
+  | ({ t: 'lobbyOptions' } & LobbyOptions)
+  | { t: 'tables'; tables: LobbyTable[] }
+  | { t: 'tableJoined'; tableId: string }
+  | { t: 'tableInfo'; table: LobbyTable; owner: boolean }
+  | { t: 'tableLeft'; reason?: string }
   | { t: 'error'; message: string }
   | { t: 'localServer'; state: 'starting' }
   | { t: 'gameError'; message: string }

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import type { DeckSummary, FormatId, Game, Prompt, ServerMsg, StopKey, Stops } from './types';
+import { sessionSet } from './util';
+import type { ChatKind, CreateTableOptions, DeckSummary, FormatId, Game, LobbyOptions, LobbyTable, Prompt, ServerMsg, StopKey, Stops } from './types';
 
 type Status = 'offline' | 'connecting' | 'online' | 'starting' | 'playing';
 /** telas dentro do app (fora da partida) */
@@ -7,7 +8,9 @@ export type View = 'home' | 'play' | 'decks' | 'editor';
 /** online: servidor público (contra pessoas); local: servidor XMage nesta máquina (contra a IA) */
 export type Mode = 'online' | 'local';
 
-export type LogLine = { id: number; html: string; turnInfo?: string; kind: 'game' | 'chat' | 'system' | 'error' };
+export type LogLine = { id: number; html: string; turnInfo?: string; kind: 'game' | 'chat' | 'system' | 'error'; user?: string };
+/** mensagem dos chats do lobby (sala e mesa) */
+export type ChatLine = { id: number; user?: string; html: string; type: string };
 
 type State = {
   status: Status;
@@ -40,6 +43,15 @@ type State = {
   /** deck pré-selecionado na tela "Jogar" */
   playDeck?: string;
 
+  // ---- lobby online
+  lobbyOptions?: LobbyOptions;
+  tables: LobbyTable[];
+  /** sala de espera: a mesa em que entramos (id já conhecido antes do primeiro tableInfo) */
+  table?: { id: string; info?: LobbyTable; owner: boolean };
+  chats: Record<'room' | 'table', ChatLine[]>;
+  /** um pedido de criar/entrar em mesa aguardando resposta do servidor */
+  tableBusy: boolean;
+
   connect: (host: string, port: number, user: string, mode: Mode) => void;
   /** encerra a sessão e volta à tela de conexão, sem entrar sozinho na próxima vez */
   disconnect: () => void;
@@ -58,11 +70,17 @@ type State = {
   setHovered: (id?: string) => void;
   dismissToast: () => void;
   leaveGame: () => void;
+  createTable: (opts: CreateTableOptions) => void;
+  joinTable: (tableId: string, deck: string, password: string) => void;
+  leaveTable: () => void;
+  sendChat: (chat: ChatKind, text: string) => void;
 };
 
 let ws: WebSocket | undefined;
 let logSeq = 0;
 const MAX_LOG = 300;
+const MAX_CHAT = 200;
+let chatSeq = 0;
 // reconexão automática: o gateway mantém a sessão XMage por ~2 min após a queda
 let lastConnect: { host: string; port: number; user: string; mode: Mode } | undefined;
 let reconnectAttempts = 0;
@@ -93,6 +111,8 @@ export const useStore = create<State>((set, get) => {
     }
     switch (m.t) {
       case 'connected':
+        // recarregar a página nesta aba volta direto para cá (e retoma a partida estacionada no gateway)
+        if (lastConnect) sessionSet('fm.resume', JSON.stringify(lastConnect));
         // ao retomar uma sessão no meio da partida, a tela de jogo continua (o estado chega em seguida)
         set({ status: get().status === 'playing' ? 'playing' : 'online', localServerStarting: false, user: m.user, server: m.server, clientVersion: m.clientVersion, serverVersion: m.serverVersion ?? undefined, stops: m.stops });
         get().send({ t: 'listDecks' });
@@ -128,7 +148,33 @@ export const useStore = create<State>((set, get) => {
         break;
       }
       case 'chat':
-        pushLog({ kind: m.type === 'TALK' ? 'chat' : 'game', html: m.message, turnInfo: m.turnInfo });
+        if (m.chat === 'room' || m.chat === 'table') {
+          const kind = m.chat;
+          set((s) => ({
+            chats: { ...s.chats, [kind]: [...s.chats[kind].slice(-MAX_CHAT + 1), { id: ++chatSeq, user: m.username, html: m.message, type: m.type }] },
+          }));
+        } else {
+          const talk = m.type === 'TALK' || m.type.startsWith('WHISPER');
+          pushLog({ kind: talk ? 'chat' : 'game', html: m.message, turnInfo: m.turnInfo, user: talk ? m.username : undefined });
+        }
+        break;
+      case 'lobbyOptions': {
+        const { t: _t, ...opts } = m;
+        set({ lobbyOptions: opts });
+        break;
+      }
+      case 'tables':
+        set({ tables: m.tables });
+        break;
+      case 'tableJoined':
+        set({ table: { id: m.tableId, owner: false }, tableBusy: false, chats: { ...get().chats, table: [] } });
+        break;
+      case 'tableInfo':
+        set({ table: { id: m.table.id, info: m.table, owner: m.owner } });
+        break;
+      case 'tableLeft':
+        if (get().table && m.reason) set({ toast: { text: m.reason, tone: 'info' } });
+        set({ table: undefined, tableBusy: false });
         break;
       case 'gameOver':
         pushLog({ kind: 'system', html: m.message });
@@ -142,7 +188,7 @@ export const useStore = create<State>((set, get) => {
         break;
       case 'error':
       case 'gameError':
-        set({ toast: { text: m.message, tone: 'error' }, localServerStarting: false });
+        set({ toast: { text: m.message, tone: 'error' }, localServerStarting: false, tableBusy: false });
         pushLog({ kind: 'error', html: m.message });
         if (get().status === 'connecting') set({ status: 'offline' });
         if (get().status === 'starting') set({ status: 'online' });
@@ -202,6 +248,9 @@ export const useStore = create<State>((set, get) => {
     log: [],
     view: 'home',
     userDecks: [],
+    tables: [],
+    chats: { room: [], table: [] },
+    tableBusy: false,
 
     navigate: (view, extra) => set({ view, ...extra }),
 
@@ -222,11 +271,7 @@ export const useStore = create<State>((set, get) => {
     },
 
     disconnect: () => {
-      try {
-        localStorage.setItem('fm.auto', '0');
-      } catch {
-        // sem localStorage: só não lembra a escolha
-      }
+      sessionSet('fm.resume', null);
       get().send({ t: 'logout' });
       lastConnect = undefined;
       reconnectAttempts = 0;
@@ -235,7 +280,7 @@ export const useStore = create<State>((set, get) => {
         ws.close();
         ws = undefined;
       }
-      set({ status: 'offline', view: 'home', mode: undefined, localServerStarting: false, game: undefined, prompt: undefined, waiting: false, server: undefined, clientVersion: undefined, serverVersion: undefined });
+      set({ status: 'offline', view: 'home', mode: undefined, localServerStarting: false, table: undefined, tables: [], chats: { room: [], table: [] }, lobbyOptions: undefined, game: undefined, prompt: undefined, waiting: false, server: undefined, clientVersion: undefined, serverVersion: undefined });
     },
 
     startGame: (format, deck, opponents, aiSkill) => {
@@ -275,6 +320,20 @@ export const useStore = create<State>((set, get) => {
 
     setHovered: (id) => set({ hovered: id }),
     dismissToast: () => set({ toast: undefined }),
-    leaveGame: () => set({ status: 'online', view: 'home', game: undefined, prompt: undefined, result: undefined, waiting: false }),
+    leaveGame: () => set({ status: 'online', view: 'home', game: undefined, prompt: undefined, result: undefined, waiting: false, table: undefined }),
+
+    createTable: (opts) => {
+      set({ tableBusy: true });
+      get().send({ t: 'createTable', ...opts });
+    },
+    joinTable: (tableId, deck, password) => {
+      set({ tableBusy: true });
+      get().send({ t: 'joinTable', tableId, deck, password });
+    },
+    leaveTable: () => {
+      get().send({ t: 'leaveTable' });
+      set({ table: undefined });
+    },
+    sendChat: (chat, text) => get().send({ t: 'sendChat', chat, text }),
   };
 });

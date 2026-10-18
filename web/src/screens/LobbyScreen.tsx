@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import { useMemo, useState } from 'react';
+import { OnlineLobby } from '../lobby/OnlineLobby';
 import { useStore } from '../store';
 import type { FormatId } from '../types';
 import { cx } from '../util';
@@ -33,7 +34,6 @@ export function LobbyScreen() {
   const status = useStore((s) => s.status);
   const startGame = useStore((s) => s.startGame);
   const mode = useStore((s) => s.mode);
-  const disconnect = useStore((s) => s.disconnect);
 
   const playDeck = useStore((s) => s.playDeck);
   const [formatId, setFormatId] = useState<FormatId>('commander');
@@ -56,33 +56,7 @@ export function LobbyScreen() {
     setOpponentDecks([RANDOM, RANDOM, RANDOM]);
   };
 
-  if (mode === 'online') {
-    // servidores públicos não aceitam mesas com IA ("Could not create player … of type Computer")
-    return (
-      <div className="flex h-full items-center justify-center overflow-auto p-6">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="w-full max-w-xl rounded-2xl border border-white/10 bg-ink-900/80 p-8 shadow-panel backdrop-blur"
-        >
-          <h1 className="font-display text-3xl font-bold text-ember-300">Jogar online</h1>
-          <p className="mt-1 text-sm text-white/50">
-            {user} @ {server}
-            {serverVersion && <span className="text-white/35"> · Servidor: {serverVersion}</span>}
-          </p>
-          <p className="mt-6 text-white/75">
-            O lobby para entrar nas mesas de outros jogadores ainda está em construção. Servidores públicos não permitem partidas contra a IA.
-          </p>
-          <button
-            onClick={disconnect}
-            className="mt-6 w-full rounded-xl bg-gradient-to-b from-ember-400 to-ember-500 py-3 font-display font-bold uppercase tracking-wider text-ink-950 transition hover:brightness-110"
-          >
-            Sair e jogar contra a IA
-          </button>
-        </motion.div>
-      </div>
-    );
-  }
+  if (mode === 'online') return <OnlineLobby />;
 
   return (
     <div className="flex h-full items-center justify-center overflow-auto p-6">
@@ -199,7 +173,21 @@ export function LobbyScreen() {
   );
 }
 
-function DeckPicker({ title, decks, value, onChange }: { title: string; decks: string[]; value: string; onChange: (v: string) => void }) {
+export function DeckPicker({
+  title,
+  decks,
+  value,
+  onChange,
+  allowRandom = true,
+  heightClass = 'h-64',
+}: {
+  title: string;
+  decks: string[];
+  value: string;
+  onChange: (v: string) => void;
+  allowRandom?: boolean;
+  heightClass?: string;
+}) {
   const [filter, setFilter] = useState('');
   const shown = useMemo(() => {
     const f = filter.toLowerCase();
@@ -210,8 +198,8 @@ function DeckPicker({ title, decks, value, onChange }: { title: string; decks: s
     <div>
       <div className="mb-2 text-xs uppercase tracking-wider text-white/50">{title}</div>
       <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder={`Buscar entre ${decks.length} decks…`} className="input mb-2" />
-      <div className="h-64 overflow-y-auto rounded-xl bg-black/30 p-1 ring-1 ring-white/10">
-        <DeckRow label="🎲 Aleatório" active={value === RANDOM} onClick={() => onChange(RANDOM)} />
+      <div className={cx(heightClass, 'overflow-y-auto rounded-xl bg-black/30 p-1 ring-1 ring-white/10')}>
+        {allowRandom && <DeckRow label="🎲 Aleatório" active={value === RANDOM} onClick={() => onChange(RANDOM)} />}
         {shown.map((d) => {
           const l = deckLabel(d);
           return <DeckRow key={d} label={l.name} folder={l.folder.replace(/^Commander( \/ )?/, '')} active={value === d} onClick={() => onChange(d)} />;
@@ -224,6 +212,7 @@ function DeckPicker({ title, decks, value, onChange }: { title: string; decks: s
 function DeckRow({ label, folder, active, onClick }: { label: string; folder?: string; active: boolean; onClick: () => void }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       className={cx('flex w-full items-baseline justify-between gap-2 rounded-lg px-3 py-1.5 text-left text-sm transition', active ? 'bg-ember-500/25 text-white' : 'text-white/75 hover:bg-white/5')}
     >

@@ -6,10 +6,12 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import mage.cards.decks.DeckCardLists;
 import mage.constants.ManaType;
+import mage.constants.MatchBufferTime;
 import mage.constants.MatchTimeLimit;
 import mage.constants.MultiplayerAttackOption;
 import mage.constants.PlayerAction;
 import mage.constants.RangeOfInfluence;
+import mage.constants.SkillLevel;
 import mage.game.match.MatchOptions;
 import mage.interfaces.MageClient;
 import mage.interfaces.callback.ClientCallback;
@@ -35,6 +37,7 @@ import org.java_websocket.WebSocket;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
@@ -80,6 +83,13 @@ public final class ClientBridge implements MageClient {
     private UUID ownTableId;
     private UUID gameId;
     private UUID playerId;
+    // mesa em que estamos (criada por nós ou de outro jogador) e o deck usado nela,
+    // reenviado sem alterações quando o servidor abre o sideboard entre os jogos
+    private UUID currentTableId;
+    private DeckCardLists currentDeck;
+    // chats que acompanhamos: as mensagens chegam com o id do chat e são separadas por origem
+    private volatile UUID roomChatId;
+    private volatile UUID tableChatId;
 
     /** Onde pontes "estacionadas" (navegador desconectado) esperam uma reconexão. */
     public interface Registry {
@@ -165,6 +175,51 @@ public final class ClientBridge implements MageClient {
             case "setStops":
                 setStops(cmd.getAsJsonObject("stops"));
                 return;
+
+            // ---- lobby online: mesas, sala de espera e chat
+            case "lobbyOptions":
+                requireSession();
+                sendLobbyOptions();
+                return;
+            case "listTables":
+                requireSession();
+                send(msg("tables").with("tables", session.getTables(roomId).stream()
+                        .map(ViewMapper::table).collect(java.util.stream.Collectors.toList())));
+                return;
+            case "createTable":
+                requireSession();
+                createTable(cmd);
+                return;
+            case "joinTable":
+                requireSession();
+                joinTable(UUID.fromString(str(cmd, "tableId")), str(cmd, "deck"), str(cmd, "password"));
+                return;
+            case "tableInfo":
+                requireSession();
+                sendTableInfo();
+                return;
+            case "startMatch":
+                requireSession();
+                if (currentTableId != null && !session.startMatch(roomId, currentTableId)) {
+                    sendError("Não foi possível começar a partida. " + session.getLastError());
+                }
+                return;
+            case "leaveTable":
+                requireSession();
+                leaveCurrentTable();
+                send(msg("tableLeft"));
+                return;
+            case "sendChat": {
+                requireSession();
+                UUID chatId = chatIdFor(str(cmd, "chat"));
+                String text = str(cmd, "text");
+                if (chatId == null) {
+                    sendError("Este chat não está disponível agora.");
+                } else if (text != null && !text.trim().isEmpty()) {
+                    session.sendChatMessage(chatId, text.trim());
+                }
+                return;
+            }
 
             // ---- editor de decks (não precisa de partida nem de conexão com o servidor XMage)
             case "searchCards":
@@ -288,6 +343,13 @@ public final class ClientBridge implements MageClient {
             return;
         }
         roomId = session.getMainRoomId();
+        if (!local) {
+            // chat geral da sala, como no lobby do cliente oficial
+            roomChatId = session.getRoomChatId(roomId).orElse(null);
+            if (roomChatId != null) {
+                session.joinChat(roomChatId);
+            }
+        }
         serverLabel = connection.getHost() + ":" + port;
         send(msg("connected").with("user", userName).with("server", serverLabel)
                 .with("clientVersion", VERSION.toString()).with("serverVersion", session.getVersionInfo())
@@ -349,6 +411,8 @@ public final class ClientBridge implements MageClient {
         }
         UUID tableId = table.getTableId();
         ownTableId = tableId;
+        currentTableId = tableId;
+        currentDeck = myDeck;
         if (!session.joinTable(roomId, tableId, userName, PlayerType.HUMAN, 1, myDeck, "")) {
             sendError("Não foi possível entrar na mesa com o deck '" + myDeck.getName() + "': " + session.getLastError());
             return;
@@ -453,7 +517,10 @@ public final class ClientBridge implements MageClient {
         }
     }
 
-    /** Sai da partida atual e remove a mesa criada por nós (encerra o jogo das IAs restantes). */
+    /**
+     * Sai da partida ou da sala de espera atual e remove a mesa criada por nós
+     * (encerra o jogo das IAs restantes; online, desfaz a mesa aberta).
+     */
     private void leaveCurrentTable() {
         if (session == null || !session.isConnected()) {
             return;
@@ -461,11 +528,178 @@ public final class ClientBridge implements MageClient {
         if (gameId != null) {
             session.quitMatch(gameId);
             gameId = null;
+        } else if (currentTableId != null && !currentTableId.equals(ownTableId)) {
+            // ainda na sala de espera da mesa de outro jogador
+            session.leaveTable(roomId, currentTableId);
         }
         if (ownTableId != null) {
             session.removeTable(roomId, ownTableId);
             ownTableId = null;
         }
+        if (tableChatId != null) {
+            session.leaveChat(tableChatId);
+            tableChatId = null;
+        }
+        currentTableId = null;
+        currentDeck = null;
+    }
+
+    private void requireSession() {
+        if (session == null || !session.isConnected()) {
+            throw new IllegalStateException("conecte-se ao servidor primeiro");
+        }
+    }
+
+    private void sendLobbyOptions() {
+        List<Map<String, Object>> gameTypes = new java.util.ArrayList<>();
+        for (GameTypeView g : session.getGameTypes()) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("name", g.getName());
+            m.put("minPlayers", g.getMinPlayers());
+            m.put("maxPlayers", g.getMaxPlayers());
+            m.put("useRange", g.isUseRange());
+            m.put("useAttackOption", g.isUseAttackOption());
+            gameTypes.add(m);
+        }
+        List<Map<String, Object>> timeLimits = new java.util.ArrayList<>();
+        for (MatchTimeLimit t : MatchTimeLimit.values()) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", t.name());
+            m.put("minutes", t.getPrioritySecs() / 60);
+            timeLimits.add(m);
+        }
+        List<String> skills = new java.util.ArrayList<>();
+        for (SkillLevel s : SkillLevel.values()) {
+            skills.add(s.name());
+        }
+        send(msg("lobbyOptions").with("gameTypes", gameTypes).with("deckTypes", session.getDeckTypes())
+                .with("timeLimits", timeLimits).with("skillLevels", skills));
+    }
+
+    /** Cria uma mesa com todas as vagas para jogadores humanos e entra nela (como o "New Table" do cliente oficial). */
+    private void createTable(JsonObject cmd) throws Exception {
+        String gameTypeName = str(cmd, "gameType");
+        GameTypeView gameType = session.getGameTypes().stream()
+                .filter(g -> g.getName().equals(gameTypeName))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("tipo de jogo desconhecido: " + gameTypeName));
+        int players = cmd.has("players") ? cmd.get("players").getAsInt() : gameType.getMinPlayers();
+        players = Math.max(gameType.getMinPlayers(), Math.min(gameType.getMaxPlayers(), players));
+        String deckType = str(cmd, "deckType");
+        String password = str(cmd, "password") == null ? "" : str(cmd, "password");
+        DeckCardLists deck = decks.load(str(cmd, "deck"));
+
+        String name = str(cmd, "name");
+        MatchOptions options = new MatchOptions(name == null || name.trim().isEmpty() ? userName + "'s table" : name.trim(), gameType.getName(), false);
+        for (int i = 0; i < players; i++) {
+            options.getPlayerTypes().add(PlayerType.HUMAN);
+        }
+        options.setDeckType(deckType);
+        options.setMatchTimeLimit(MatchTimeLimit.valueOf(str(cmd, "timeLimit") == null ? "NONE" : str(cmd, "timeLimit")));
+        options.setMatchBufferTime(MatchBufferTime.NONE);
+        options.setAttackOption(MultiplayerAttackOption.MULTIPLE);
+        options.setRange(RangeOfInfluence.ALL);
+        options.setSkillLevel(SkillLevel.valueOf(str(cmd, "skill") == null ? "CASUAL" : str(cmd, "skill")));
+        options.setWinsNeeded(cmd.has("wins") ? Math.max(1, cmd.get("wins").getAsInt()) : 1);
+        options.setRollbackTurnsAllowed(true);
+        options.setSpectatorsAllowed(cmd.has("spectators") && cmd.get("spectators").getAsBoolean());
+        options.setRated(false);
+        options.setPassword(password);
+        options.setQuitRatio(100);
+        options.setMinimumRating(0);
+        // mesmas regras do NewTableDialog do cliente oficial
+        options.setLimited(deckType != null && deckType.startsWith("Limited"));
+        if (deckType != null && deckType.startsWith("Variant Magic - Freeform Unlimited Commander")) {
+            options.setLimited(true);
+        }
+
+        leaveCurrentTable();
+        lastServerError = null;
+        TableView table = session.createTable(roomId, options);
+        if (table == null) {
+            if (lastServerError == null) {
+                sendError("O servidor recusou a criação da mesa. " + session.getLastError());
+            }
+            return;
+        }
+        if (!session.joinTable(roomId, table.getTableId(), userName, PlayerType.HUMAN, 1, deck, password)) {
+            if (lastServerError == null) {
+                sendError("Não foi possível entrar na mesa com o deck '" + deck.getName() + "'. " + session.getLastError());
+            }
+            session.removeTable(roomId, table.getTableId());
+            return;
+        }
+        ownTableId = table.getTableId();
+        enterTable(table.getTableId(), deck);
+    }
+
+    private void joinTable(UUID tableId, String deckPath, String password) throws Exception {
+        DeckCardLists deck = decks.load(deckPath);
+        leaveCurrentTable();
+        lastServerError = null;
+        if (!session.joinTable(roomId, tableId, userName, PlayerType.HUMAN, 1, deck, password == null ? "" : password)) {
+            if (lastServerError == null) {
+                sendError("O servidor recusou a entrada na mesa. " + session.getLastError());
+            }
+            return;
+        }
+        enterTable(tableId, deck);
+    }
+
+    private void enterTable(UUID tableId, DeckCardLists deck) {
+        currentTableId = tableId;
+        currentDeck = deck;
+        tableChatId = session.getTableChatId(tableId).orElse(null);
+        if (tableChatId != null) {
+            session.joinChat(tableChatId);
+        }
+        send(msg("tableJoined").with("tableId", tableId));
+        sendTableInfo();
+    }
+
+    /** Estado da mesa para a sala de espera (o navegador pergunta a cada poucos segundos, como o cliente oficial). */
+    private void sendTableInfo() {
+        UUID tableId = currentTableId;
+        if (tableId == null) {
+            send(msg("tableLeft"));
+            return;
+        }
+        Optional<TableView> table = session.getTable(roomId, tableId);
+        if (!table.isPresent()) {
+            // mesa desfeita pelo dono (ou pelo servidor)
+            if (tableChatId != null) {
+                session.leaveChat(tableChatId);
+                tableChatId = null;
+            }
+            currentTableId = null;
+            currentDeck = null;
+            send(msg("tableLeft").with("reason", "A mesa foi encerrada."));
+            return;
+        }
+        send(msg("tableInfo").with("table", ViewMapper.table(table.get())).with("owner", tableId.equals(ownTableId)));
+    }
+
+    private UUID chatIdFor(String kind) {
+        if ("room".equals(kind)) {
+            return roomChatId;
+        }
+        if ("table".equals(kind)) {
+            return tableChatId;
+        }
+        if ("game".equals(kind) && gameId != null) {
+            return session.getGameChatId(gameId).orElse(null);
+        }
+        return null;
+    }
+
+    private String chatKind(UUID chatId) {
+        if (chatId != null && chatId.equals(roomChatId)) {
+            return "room";
+        }
+        if (chatId != null && chatId.equals(tableChatId)) {
+            return "table";
+        }
+        return "game";
     }
 
     /** O navegador desconectou: estaciona a sessão por um tempo ou encerra de vez. */
@@ -618,7 +852,7 @@ public final class ClientBridge implements MageClient {
             }
             case CHATMESSAGE: {
                 ChatMessage m = (ChatMessage) data;
-                send(msg("chat").with("message", m.getMessage()).with("turnInfo", m.getTurnInfo())
+                send(msg("chat").with("chat", chatKind(callback.getObjectId())).with("message", m.getMessage()).with("turnInfo", m.getTurnInfo())
                         .with("username", m.getUsername()).with("type", String.valueOf(m.getMessageType())));
                 break;
             }
@@ -631,6 +865,17 @@ public final class ClientBridge implements MageClient {
             case USER_REQUEST_DIALOG: {
                 UserRequestMessage m = (UserRequestMessage) data;
                 send(msg("userRequest").with("title", m.getTitle()).with("message", m.getMessage()));
+                break;
+            }
+            case SIDEBOARD: {
+                TableClientMessage m = (TableClientMessage) data;
+                if (!m.getFlag() && currentDeck != null) {
+                    // sideboard entre os jogos de uma partida melhor de N: ainda sem editor, mantém o deck
+                    session.submitDeck(m.getCurrentTableId(), currentDeck);
+                    send(msg("serverMessage").with("message", "Entre os jogos: o deck foi mantido sem trocas de sideboard."));
+                } else {
+                    sendError("Montagem de deck limitado ainda não é suportada no FellowMage.");
+                }
                 break;
             }
             default:
@@ -777,7 +1022,7 @@ public final class ClientBridge implements MageClient {
                 lastPromptJson = json;
                 promptAnswered = false;
             }
-        } else if ("chat".equals(t)) {
+        } else if ("chat".equals(t) && "game".equals(body.get("chat"))) {
             chatHistory.addLast(json);
             while (chatHistory.size() > CHAT_HISTORY) {
                 chatHistory.pollFirst();

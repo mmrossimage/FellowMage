@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
 import { useStore, type Mode } from '../store';
+import { sessionGet, sessionSet } from '../util';
 
 let autoConnectTried = false;
 
@@ -22,8 +23,6 @@ export function ConnectScreen() {
 
   const start = (chosen: Mode) => {
     localStorageSet('fm.user', user);
-    localStorageSet('fm.mode', chosen);
-    localStorageSet('fm.auto', user ? '1' : '0');
     if (chosen === 'online') {
       localStorageSet('fm.host', host);
       localStorageSet('fm.port', port);
@@ -33,15 +32,20 @@ export function ConnectScreen() {
     }
   };
 
-  // ao recarregar a página: entra direto no último modo (e retoma a partida, se houver).
+  // ao recarregar a página (F5) na mesma aba: volta direto, retomando a partida, se houver.
   // Uma vez só por carregamento — o StrictMode monta o componente duas vezes em dev, e duas
   // conexões simultâneas do mesmo usuário fazem o servidor XMage derrubar uma delas.
   useEffect(() => {
     if (autoConnectTried) return;
     autoConnectTried = true;
-    if (status !== 'offline' || !user || localStorageGet('fm.auto') !== '1') return;
-    const savedMode = localStorageGet('fm.mode') as Mode | null;
-    start(savedMode ?? (isLocalHost(savedHost) ? 'local' : 'online'));
+    const resume = sessionGet('fm.resume');
+    if (status !== 'offline' || !resume) return;
+    try {
+      const r = JSON.parse(resume) as { host: string; port: number; user: string; mode: Mode };
+      connect(r.host, r.port, r.user, r.mode);
+    } catch {
+      sessionSet('fm.resume', null);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

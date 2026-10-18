@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect } from 'react';
 import { GameBoard } from './game/GameBoard';
+import { WaitingRoom } from './lobby/WaitingRoom';
 import { ConnectScreen } from './screens/ConnectScreen';
 import { Shell } from './screens/Shell';
 import { useStore } from './store';
@@ -8,9 +9,18 @@ import { cx } from './util';
 
 export default function App() {
   const status = useStore((s) => s.status);
+  const inTable = useStore((s) => !!s.table);
   return (
     <div className="h-full w-full">
-      {status === 'playing' ? <GameBoard /> : status === 'online' || status === 'starting' ? <Shell /> : <ConnectScreen />}
+      {status === 'playing' ? (
+        <GameBoard />
+      ) : status === 'online' && inTable ? (
+        <WaitingRoom />
+      ) : status === 'online' || status === 'starting' ? (
+        <Shell />
+      ) : (
+        <ConnectScreen />
+      )}
       <Toast />
     </div>
   );

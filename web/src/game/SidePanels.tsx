@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../store';
 import { cx, rulesToHtml, sanitizeHtml } from '../util';
 import { CardFace } from './CardFace';
@@ -63,16 +63,57 @@ export function StackPanel() {
 /** Histórico da partida (mensagens do servidor). */
 export function LogPanel() {
   const log = useStore((s) => s.log);
+  const mode = useStore((s) => s.mode);
+  const sendChat = useStore((s) => s.sendChat);
+  const [tab, setTab] = useState<'all' | 'chat'>('all');
+  const [text, setText] = useState('');
   const ref = useRef<HTMLDivElement>(null);
+  const chatCount = log.filter((l) => l.kind === 'chat').length;
+  // aviso de mensagem nova enquanto a aba "Chat" está fechada
+  const [seenChat, setSeenChat] = useState(0);
+  useEffect(() => {
+    if (tab === 'chat') setSeenChat(chatCount);
+  }, [tab, chatCount]);
+  const shown = tab === 'chat' ? log.filter((l) => l.kind === 'chat') : log;
   useEffect(() => {
     ref.current?.scrollTo({ top: ref.current.scrollHeight, behavior: 'smooth' });
-  }, [log.length]);
+  }, [shown.length]);
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const t = text.trim();
+    if (!t) return;
+    sendChat('game', t);
+    setText('');
+  };
 
   return (
     <section className="flex min-h-0 flex-1 flex-col rounded-xl border border-white/10 bg-ink-900/70 shadow-panel backdrop-blur">
-      <h3 className="border-b border-white/10 px-3 py-2 font-display text-xs uppercase tracking-[0.2em] text-white/60">Histórico</h3>
+      <div className="flex items-center gap-1 border-b border-white/10 px-2 py-1.5">
+        {(
+          [
+            ['all', 'Histórico'],
+            ['chat', 'Chat'],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            onClick={() => setTab(id)}
+            className={cx(
+              'relative rounded-md px-2 py-1 font-display text-xs uppercase tracking-[0.2em] transition',
+              tab === id ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white/80',
+            )}
+          >
+            {label}
+            {id === 'chat' && tab !== 'chat' && chatCount > seenChat && (
+              <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-arcane-400" title="Mensagem nova" />
+            )}
+          </button>
+        ))}
+      </div>
       <div ref={ref} className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-2 text-[12px] leading-snug">
-        {log.map((l) => (
+        {tab === 'chat' && shown.length === 0 && <p className="text-white/35">Nenhuma mensagem dos jogadores ainda.</p>}
+        {shown.map((l) => (
           <p
             key={l.id}
             className={cx(
@@ -82,11 +123,24 @@ export function LogPanel() {
               l.kind === 'game' && 'text-white/75',
             )}
           >
-            {l.turnInfo && <span className="mr-1 text-white/35">{l.turnInfo}</span>}
+            {l.turnInfo && tab === 'all' && <span className="mr-1 text-white/35">{l.turnInfo}</span>}
+            {l.user && <b className="mr-1">{l.user}:</b>}
             <span dangerouslySetInnerHTML={{ __html: sanitizeHtml(l.html) }} />
           </p>
         ))}
       </div>
+      {mode === 'online' && (
+        <form onSubmit={submit} className="flex gap-1.5 border-t border-white/10 p-2">
+          <input
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="Mensagem para a mesa…"
+            className="input py-1.5 text-xs"
+            maxLength={500}
+          />
+          <button className="shrink-0 rounded-lg bg-white/10 px-2.5 text-xs text-white ring-1 ring-white/15 hover:bg-white/20">Enviar</button>
+        </form>
+      )}
     </section>
   );
 }

@@ -16,7 +16,9 @@ import mage.view.ManaPoolView;
 import mage.view.PermanentView;
 import mage.view.PlayerView;
 import mage.view.RevealedView;
+import mage.view.SeatView;
 import mage.view.StackAbilityView;
+import mage.view.TableView;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -52,6 +54,38 @@ public final class ViewMapper {
         m.put("revealed", g.getRevealed().stream().map(ViewMapper::revealed).collect(Collectors.toList()));
         m.put("lookedAt", g.getLookedAt().stream().map(ViewMapper::lookedAt).collect(Collectors.toList()));
         m.put("playable", playable == null ? new ArrayList<>() : new ArrayList<>(playable.getObjects().keySet()));
+        return m;
+    }
+
+    /** Mesa do lobby (lista de mesas e sala de espera). */
+    public static Map<String, Object> table(TableView t) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", t.getTableId());
+        m.put("name", t.getTableName());
+        m.put("owner", t.getControllerName());
+        m.put("gameType", t.getGameType());
+        m.put("deckType", t.getDeckType());
+        m.put("state", t.getTableState() == null ? null : t.getTableState().name());
+        m.put("stateText", t.getTableStateText());
+        m.put("info", t.getAdditionalInfoShort());
+        m.put("created", t.getCreateTime() == null ? null : t.getCreateTime().getTime());
+        m.put("passworded", t.isPassworded());
+        m.put("rated", t.isRated());
+        m.put("tournament", t.isTournament());
+        m.put("limited", t.isLimited());
+        m.put("spectators", t.getSpectatorsAllowed());
+        m.put("skill", t.getSkillLevel() == null ? null : t.getSkillLevel().toString());
+        m.put("quitRatio", t.getQuitRatio());
+        m.put("minRating", t.getMinimumRating());
+        List<Map<String, Object>> seats = new ArrayList<>();
+        for (SeatView s : t.getSeats()) {
+            Map<String, Object> seat = new LinkedHashMap<>();
+            seat.put("name", s.getPlayerName());
+            seat.put("type", s.getPlayerType() == null ? null : s.getPlayerType().name());
+            seat.put("flag", s.getFlagName());
+            seats.add(seat);
+        }
+        m.put("seats", seats);
         return m;
     }
 
