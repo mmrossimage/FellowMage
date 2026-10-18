@@ -32,6 +32,8 @@ type State = {
   log: LogLine[];
   toast?: { text: string; tone: 'error' | 'info' };
   result?: { won: boolean; title: string; info: string };
+  /** GAME_OVER: o jogo acabou no servidor (o resultado detalhado pode chegar depois, ou nunca) */
+  gameOver?: string;
   hovered?: string; // id da carta sob o cursor (para o preview grande)
   /** paradas de prioridade por passo (preferência do usuário no servidor XMage) */
   stops?: Stops;
@@ -113,8 +115,12 @@ export const useStore = create<State>((set, get) => {
       case 'connected':
         // recarregar a página nesta aba volta direto para cá (e retoma a partida estacionada no gateway)
         if (lastConnect) sessionSet('fm.resume', JSON.stringify(lastConnect));
-        // ao retomar uma sessão no meio da partida, a tela de jogo continua (o estado chega em seguida)
-        set({ status: get().status === 'playing' ? 'playing' : 'online', localServerStarting: false, user: m.user, server: m.server, clientVersion: m.clientVersion, serverVersion: m.serverVersion ?? undefined, stops: m.stops });
+        // ao retomar uma sessão no meio da partida, a tela de jogo continua (o estado chega em seguida);
+        // se a partida acabou (ou a sessão expirou) enquanto o navegador estava fora, volta ao lobby
+        if (get().status === 'playing' && !m.inGame) {
+          set({ game: undefined, prompt: undefined, waiting: false, result: undefined, gameOver: undefined, table: undefined, toast: { text: 'A partida terminou enquanto você estava desconectado.', tone: 'info' } });
+        }
+        set({ status: m.inGame ? 'playing' : 'online', localServerStarting: false, user: m.user, server: m.server, clientVersion: m.clientVersion, serverVersion: m.serverVersion ?? undefined, stops: m.stops });
         get().send({ t: 'listDecks' });
         get().refreshUserDecks();
         break;
@@ -134,7 +140,7 @@ export const useStore = create<State>((set, get) => {
         pushLog({ kind: 'system', html: `${m.format}: <b>${m.deck}</b> contra ${m.opponents.map((o) => `<b>${o}</b>`).join(', ')}` });
         break;
       case 'gameStarted':
-        set({ status: 'playing', gameId: m.gameId, playerId: m.playerId, result: undefined, log: [] });
+        set({ status: 'playing', gameId: m.gameId, playerId: m.playerId, result: undefined, gameOver: undefined, log: [] });
         break;
       case 'game': {
         // GAME_UPDATE sem prompt não altera o pedido pendente
@@ -178,7 +184,7 @@ export const useStore = create<State>((set, get) => {
         break;
       case 'gameOver':
         pushLog({ kind: 'system', html: m.message });
-        set({ waiting: false });
+        set({ waiting: false, prompt: undefined, gameOver: m.message });
         break;
       case 'endGame':
         set({ result: { won: m.won, title: m.title, info: m.info }, waiting: false });
@@ -320,7 +326,11 @@ export const useStore = create<State>((set, get) => {
 
     setHovered: (id) => set({ hovered: id }),
     dismissToast: () => set({ toast: undefined }),
-    leaveGame: () => set({ status: 'online', view: 'home', game: undefined, prompt: undefined, result: undefined, waiting: false, table: undefined }),
+    leaveGame: () => {
+      // o gateway sai da partida (ou só da mesa, se ela já acabou); sem isso ele reabriria o jogo ao reconectar
+      get().send({ t: 'quit' });
+      set({ status: 'online', view: 'home', game: undefined, prompt: undefined, result: undefined, gameOver: undefined, waiting: false, table: undefined });
+    },
 
     createTable: (opts) => {
       set({ tableBusy: true });

@@ -209,6 +209,13 @@ public final class ClientBridge implements MageClient {
                 leaveCurrentTable();
                 send(msg("tableLeft"));
                 return;
+            case "quit":
+                // sair da partida (eliminado no multiplayer, partida encerrada ou saída pela tela);
+                // não exige partida em andamento: depois do GAME_OVER o gameId já foi esquecido
+                if (session != null && session.isConnected()) {
+                    leaveCurrentTable();
+                }
+                return;
             case "sendChat": {
                 requireSession();
                 UUID chatId = chatIdFor(str(cmd, "chat"));
@@ -276,10 +283,6 @@ public final class ClientBridge implements MageClient {
                 break;
             case "concede":
                 session.sendPlayerAction(PlayerAction.CONCEDE, gameId, null);
-                break;
-            case "quit":
-                // sair da partida (ex.: já eliminado no multiplayer e sem vontade de assistir)
-                leaveCurrentTable();
                 break;
             case "logout":
                 // saída voluntária: ao fechar o socket, encerra a sessão em vez de estacioná-la
@@ -353,7 +356,7 @@ public final class ClientBridge implements MageClient {
         serverLabel = connection.getHost() + ":" + port;
         send(msg("connected").with("user", userName).with("server", serverLabel)
                 .with("clientVersion", VERSION.toString()).with("serverVersion", session.getVersionInfo())
-                .with("stops", stopsToJson()));
+                .with("stops", stopsToJson()).with("inGame", false));
     }
 
     private void startGame(GameFormat format, String deckPath, List<String> opponentDecks, int aiSkill) throws Exception {
@@ -731,7 +734,7 @@ public final class ClientBridge implements MageClient {
         worker.submit(() -> {
             send(msg("connected").with("user", userName).with("server", serverLabel)
                     .with("clientVersion", VERSION.toString()).with("serverVersion", session == null ? null : session.getVersionInfo())
-                    .with("stops", stopsToJson()).with("resumed", true));
+                    .with("stops", stopsToJson()).with("resumed", true).with("inGame", gameId != null));
             send(msg("decks").with("decks", decks.list()));
             if (gameId != null) {
                 // sendRaw: não passar por remember(), que limparia o estado guardado
@@ -841,6 +844,9 @@ public final class ClientBridge implements MageClient {
                 send(msg("gameError").with("message", String.valueOf(data)));
                 break;
             case GAME_OVER: {
+                // o servidor já removeu nossa sessão de jogo (GameController.endGame): esquecer a partida,
+                // senão uma reconexão do navegador reabre um tabuleiro que ninguém mais atualiza
+                gameId = null;
                 String text = data instanceof GameClientMessage ? ((GameClientMessage) data).getMessage() : String.valueOf(data);
                 send(msg("gameOver").with("message", text));
                 break;
@@ -1013,6 +1019,11 @@ public final class ClientBridge implements MageClient {
             chatHistory.clear();
             lastGameJson = null;
             lastPromptJson = null;
+        } else if ("gameOver".equals(t)) {
+            chatHistory.clear();
+            lastGameJson = null;
+            lastPromptJson = null;
+            promptAnswered = true;
         } else if ("game".equals(t)) {
             if (body.containsKey("game")) {
                 lastGameJson = json;

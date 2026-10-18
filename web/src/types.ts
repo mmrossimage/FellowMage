@@ -251,7 +251,7 @@ export type CreateTableOptions = {
 };
 
 export type ServerMsg =
-  | { t: 'connected'; user: string; server: string; clientVersion?: string; serverVersion?: string | null; stops: Stops }
+  | { t: 'connected'; user: string; server: string; clientVersion?: string; serverVersion?: string | null; stops: Stops; resumed?: boolean; inGame?: boolean }
   | { t: 'disconnected' }
   | { t: 'decks'; decks: string[] }
   | { t: 'stops'; stops: Stops }

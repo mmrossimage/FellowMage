@@ -20,11 +20,16 @@ export function GameBoard() {
   const game = useStore((s) => s.game);
   const send = useStore((s) => s.send);
   const result = useStore((s) => s.result);
+  const gameOver = useStore((s) => s.gameOver);
+  const leaveGame = useStore((s) => s.leaveGame);
 
   if (!game) {
     return (
-      <div className="flex h-full items-center justify-center">
+      <div className="flex h-full flex-col items-center justify-center gap-6">
         <div className="animate-pulse font-display text-xl text-white/70">Embaralhando os grimórios…</div>
+        <button onClick={leaveGame} className="rounded-lg px-3 py-1.5 text-xs text-white/50 ring-1 ring-white/10 hover:bg-white/10 hover:text-white">
+          Voltar ao lobby
+        </button>
       </div>
     );
   }
@@ -38,12 +43,21 @@ export function GameBoard() {
         <header className="col-span-2 flex items-center justify-between gap-4 border-b border-white/5 bg-black/30 px-5 py-1.5 backdrop-blur">
           <span className="hidden font-display text-lg font-bold tracking-wider text-ember-300 xl:inline">FellowMage</span>
           <PhaseTracker />
-          <button
-            onClick={() => confirm('Conceder a partida?') && send({ t: 'concede' })}
-            className="rounded-lg px-3 py-1.5 text-xs text-white/60 ring-1 ring-white/10 hover:bg-blood-500/20 hover:text-blood-400"
-          >
-            Conceder
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => confirm('Conceder a partida?') && send({ t: 'concede' })}
+              className="rounded-lg px-3 py-1.5 text-xs text-white/60 ring-1 ring-white/10 hover:bg-blood-500/20 hover:text-blood-400"
+            >
+              Conceder
+            </button>
+            {/* saída sempre disponível, como fechar a aba do jogo no cliente oficial (quitMatch) */}
+            <button
+              onClick={() => (gameOver || confirm('Sair da partida? Se ela ainda estiver em andamento, você a abandona.')) && leaveGame()}
+              className="rounded-lg px-3 py-1.5 text-xs text-white/60 ring-1 ring-white/10 hover:bg-white/10 hover:text-white"
+            >
+              Sair
+            </button>
+          </div>
         </header>
 
         <main
@@ -104,7 +118,7 @@ export function GameBoard() {
         <CardPreview />
         <PromptDialogs />
         <EliminatedBanner me={me} />
-        <AnimatePresence>{result && <ResultOverlay />}</AnimatePresence>
+        <AnimatePresence>{(result || gameOver) && <ResultOverlay />}</AnimatePresence>
       </div>
     </LayoutGroup>
   );
@@ -155,12 +169,11 @@ function TurnOrder({ players }: { players: Player[] }) {
 
 /** No multiplayer, quem perde sai do jogo mas a partida continua: oferecer assistir ou sair. */
 function EliminatedBanner({ me }: { me: Player }) {
-  const result = useStore((s) => s.result);
-  const send = useStore((s) => s.send);
+  const ended = useStore((s) => !!s.result || !!s.gameOver);
   const leaveGame = useStore((s) => s.leaveGame);
   const [dismissed, setDismissed] = useState(false);
   const out = me.left || me.life <= 0;
-  if (!out || dismissed || result) return null;
+  if (!out || dismissed || ended) return null;
   return (
     <motion.div
       initial={{ opacity: 0, y: -20 }}
@@ -175,10 +188,7 @@ function EliminatedBanner({ me }: { me: Player }) {
         Assistir
       </button>
       <button
-        onClick={() => {
-          send({ t: 'quit' });
-          leaveGame();
-        }}
+        onClick={leaveGame}
         className="rounded-xl bg-gradient-to-b from-ember-400 to-ember-500 px-4 py-2 text-sm font-semibold text-ink-950"
       >
         Sair da partida
@@ -188,14 +198,25 @@ function EliminatedBanner({ me }: { me: Player }) {
 }
 
 function ResultOverlay() {
-  const result = useStore((s) => s.result)!;
+  const result = useStore((s) => s.result);
+  const gameOver = useStore((s) => s.gameOver);
   const leaveGame = useStore((s) => s.leaveGame);
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur">
       <motion.div initial={{ scale: 0.8 }} animate={{ scale: 1 }} className="text-center">
-        <div className={`font-display text-6xl font-bold ${result.won ? 'text-ember-300' : 'text-blood-400'}`}>{result.won ? 'Vitória' : 'Derrota'}</div>
-        <p className="mt-3 text-white/70" dangerouslySetInnerHTML={{ __html: promptHtml(result.title) }} />
-        <p className="text-white/50" dangerouslySetInnerHTML={{ __html: promptHtml(result.info) }} />
+        {result ? (
+          <>
+            <div className={`font-display text-6xl font-bold ${result.won ? 'text-ember-300' : 'text-blood-400'}`}>{result.won ? 'Vitória' : 'Derrota'}</div>
+            <p className="mt-3 text-white/70" dangerouslySetInnerHTML={{ __html: promptHtml(result.title) }} />
+            <p className="text-white/50" dangerouslySetInnerHTML={{ __html: promptHtml(result.info) }} />
+          </>
+        ) : (
+          // só o GAME_OVER chegou (o END_GAME_INFO vem da partida e pode faltar): como o "Close game" do cliente oficial
+          <>
+            <div className="font-display text-6xl font-bold text-ember-300">Fim de jogo</div>
+            <p className="mt-3 text-white/70" dangerouslySetInnerHTML={{ __html: promptHtml(gameOver ?? '') }} />
+          </>
+        )}
         <button onClick={leaveGame} className="mt-8 rounded-xl bg-gradient-to-b from-ember-400 to-ember-500 px-8 py-3 font-display font-bold uppercase tracking-wider text-ink-950">
           Voltar ao lobby
         </button>
