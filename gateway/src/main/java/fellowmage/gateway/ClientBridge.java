@@ -1391,6 +1391,10 @@ public final class ClientBridge implements MageClient {
             } else {
                 c.put("choices", m.getChoice().getChoices());
             }
+            // ordem sugerida pelo servidor (ex.: tipos de criatura seus, depois dos oponentes; PickChoiceDialog)
+            if (m.getChoice().isSortEnabled()) {
+                c.put("sortData", m.getChoice().getSortData());
+            }
             p.put("choice", c);
         }
         if (m.getMessages() != null && !m.getMessages().isEmpty()) {

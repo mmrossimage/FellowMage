@@ -90,6 +90,11 @@ function ChoiceDialog({ prompt }: { prompt: Prompt }) {
   const entries: [string, string][] = c.keyChoices
     ? Object.entries(c.keyChoices)
     : (c.choices ?? []).map((x) => [x, x]);
+  // ordem do servidor (ex.: tipos de criatura seus e dos oponentes primeiro), depois alfabética, como o PickChoiceDialog
+  if (c.sortData) {
+    const order = c.sortData;
+    entries.sort(([ka, la], [kb, lb]) => (order[ka] ?? 0) - (order[kb] ?? 0) || la.localeCompare(lb));
+  }
   const shown = entries.filter(([, label]) => label.toLowerCase().includes(filter.toLowerCase()));
 
   return (

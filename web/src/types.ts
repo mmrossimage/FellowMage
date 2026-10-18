@@ -229,6 +229,8 @@ export type Prompt = {
     required: boolean;
     choices?: string[];
     keyChoices?: Record<string, string>;
+    /** prioridade por chave (menor = primeiro), quando o servidor sugere uma ordem */
+    sortData?: Record<string, number>;
   };
   multiAmount?: { message: string; min: number; max: number; default: number }[];
   abilities?: Record<string, string>;
