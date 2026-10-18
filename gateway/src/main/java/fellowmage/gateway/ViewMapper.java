@@ -143,6 +143,9 @@ public final class ViewMapper {
         m.put("counters", counters(c.getCounters()));
         m.put("token", c.isToken());
         m.put("faceDown", c.isFaceDown());
+        // permanente transformado: nome e regras já são do verso, mas set/número continuam os da carta
+        // (o cliente oficial baixa a imagem do verso à parte, ver ScryfallImageSource.isSecondSide)
+        m.put("transformed", c.isTransformed());
         m.put("ability", c.isAbility());
         m.put("targets", c.getTargets());
         if (c instanceof StackAbilityView) {

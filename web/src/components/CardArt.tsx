@@ -15,6 +15,14 @@ export const CardArt = memo(function CardArt({ card, size = 'normal', className,
   const urls = cardImageUrls(card, crop ? 'art_crop' : size);
   const [attempt, setAttempt] = useState(0);
   const [loaded, setLoaded] = useState(false);
+  // a mesma carta pode trocar de imagem (ex.: transformar): recomeça as tentativas
+  const urlsKey = urls.join('|');
+  const [shownKey, setShownKey] = useState(urlsKey);
+  if (shownKey !== urlsKey) {
+    setShownKey(urlsKey);
+    setAttempt(0);
+    setLoaded(false);
+  }
   const src = urls[attempt];
 
   return (

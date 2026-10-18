@@ -6,17 +6,19 @@ import type { Card } from './types';
 
 export type ImageSize = 'small' | 'normal' | 'large' | 'art_crop';
 
-export type ImageRef = Pick<Card, 'name'> & Partial<Pick<Card, 'set' | 'num' | 'faceDown' | 'sourceName'>>;
+export type ImageRef = Pick<Card, 'name'> & Partial<Pick<Card, 'set' | 'num' | 'faceDown' | 'sourceName' | 'transformed'>>;
 
 export function cardImageUrls(card: ImageRef, size: ImageSize = 'normal'): string[] {
   if (card.faceDown) return [];
+  // carta transformada: o Scryfall devolve a frente por padrão, o verso só com face=back
+  const face = card.transformed ? '&face=back' : '';
   const urls: string[] = [];
   if (card.set && card.num) {
-    urls.push(`https://api.scryfall.com/cards/${encodeURIComponent(card.set.toLowerCase())}/${encodeURIComponent(card.num)}?format=image&version=${size}`);
+    urls.push(`https://api.scryfall.com/cards/${encodeURIComponent(card.set.toLowerCase())}/${encodeURIComponent(card.num)}?format=image&version=${size}${face}`);
   }
   const name = (card.sourceName ?? card.name)?.split(' // ')[0];
   if (name) {
-    urls.push(`https://api.scryfall.com/cards/named?exact=${encodeURIComponent(name)}&format=image&version=${size}`);
+    urls.push(`https://api.scryfall.com/cards/named?exact=${encodeURIComponent(name)}&format=image&version=${size}${face}`);
   }
   return urls;
 }

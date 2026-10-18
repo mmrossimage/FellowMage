@@ -17,6 +17,14 @@ export const CardFace = memo(function CardFace({ card, size = 'normal', classNam
   const urls = cardImageUrls(card, size);
   const [attempt, setAttempt] = useState(0);
   const [loaded, setLoaded] = useState(false);
+  // a mesma carta pode trocar de imagem (ex.: transformar): recomeça as tentativas
+  const urlsKey = urls.join('|');
+  const [shownKey, setShownKey] = useState(urlsKey);
+  if (shownKey !== urlsKey) {
+    setShownKey(urlsKey);
+    setAttempt(0);
+    setLoaded(false);
+  }
   const src = urls[attempt];
   const showFallback = !src || !loaded;
 

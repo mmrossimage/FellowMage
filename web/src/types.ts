@@ -21,6 +21,8 @@ export type Card = {
   counters: Counter[];
   token: boolean;
   faceDown: boolean;
+  /** permanente com o verso para cima (cartas que transformam) */
+  transformed?: boolean;
   ability: boolean;
   sourceName?: string;
   targets?: string[];
