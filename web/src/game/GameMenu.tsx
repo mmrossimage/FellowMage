@@ -81,7 +81,7 @@ export function GameMenu() {
             initial={{ opacity: 0, y: -6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 }}
-            className="absolute right-0 top-9 z-[58] max-h-[80vh] w-80 overflow-y-auto rounded-xl border border-white/10 bg-ink-900/97 p-2 text-sm shadow-panel backdrop-blur"
+            className="absolute right-0 top-9 z-[58] max-h-[80vh] w-80 overflow-y-auto rounded-xl border border-white/10 bg-ink-900/95 p-2 text-sm shadow-panel backdrop-blur"
           >
             {game.watching ? (
               <Section title="Espectador">

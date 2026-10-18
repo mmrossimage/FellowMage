@@ -78,7 +78,7 @@ export function DeckBuildScreen() {
     });
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fixed inset-0 z-[57] flex flex-col bg-ink-950/97 backdrop-blur">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fixed inset-0 z-[57] flex flex-col bg-ink-950/95 backdrop-blur">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/5 px-5 py-3">
         <div>
           <div className="font-display text-xl font-bold text-ember-300">{TITLES[build.mode]}</div>

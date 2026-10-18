@@ -44,7 +44,9 @@ export function GameBoard() {
   return (
     <LayoutGroup>
       <div className="table-bg relative grid h-full grid-cols-[1fr_minmax(240px,18vw)] grid-rows-[auto_minmax(0,1fr)] overflow-clip">
-        <header className="col-span-2 flex items-center justify-between gap-4 border-b border-white/5 bg-black/30 px-5 py-1.5 backdrop-blur">
+        {/* z-40: o backdrop-blur cria um contexto de empilhamento próprio; sem z, os menus do cabeçalho
+            (Menu, Paradas) ficam atrás dos painéis do tabuleiro */}
+        <header className="relative z-40 col-span-2 flex items-center justify-between gap-4 border-b border-white/5 bg-black/30 px-5 py-1.5 backdrop-blur">
           <span className="hidden font-display text-lg font-bold tracking-wider text-ember-300 xl:inline">FellowMage</span>
           <PhaseTracker />
           <div className="flex gap-2">
