@@ -13,14 +13,32 @@ export function sanitizeHtml(html: string | undefined | null): string {
         continue;
       }
       const color = child.getAttribute('color');
+      // referência a carta (GameLog.getColoredObjectIdName): id do objeto e nome alternativo para a prévia
+      const objectId = child.getAttribute('object_id');
+      const altName = child.getAttribute('alternative_name');
       for (const attr of Array.from(child.attributes)) child.removeAttribute(attr.name);
       if (color && /^#?[\w]+$/.test(color)) child.setAttribute('style', `color:${color}`);
+      if (objectId) {
+        child.setAttribute('data-obj', objectId);
+        child.setAttribute('data-card', decodeName(altName) || child.textContent || '');
+        child.setAttribute('class', 'card-ref');
+      }
       walk(child);
     }
   };
   const root = doc.body.firstElementChild!;
   walk(root);
   return root.innerHTML;
+}
+
+/** alternative_name vem de CardUtil.urlEncode (URLEncoder do Java: espaço vira "+") */
+function decodeName(s: string | null): string {
+  if (!s) return '';
+  try {
+    return decodeURIComponent(s.replace(/\+/g, ' '));
+  } catch {
+    return s;
+  }
 }
 
 export function stripHtml(html: string | undefined | null): string {

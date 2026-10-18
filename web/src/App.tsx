@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect } from 'react';
+import { CardRefPreview } from './components/CardRefPreview';
 import { UserRequestDialog } from './components/UserRequestDialog';
 import { DeckBuildScreen } from './deck/DeckBuildScreen';
 import { DraftScreen, TournamentScreen } from './lobby/TournamentScreen';
@@ -33,6 +34,7 @@ export default function App() {
       )}
       {hasDeckBuild && <DeckBuildScreen />}
       <UserRequestDialog />
+      <CardRefPreview />
       <Toast />
     </div>
   );

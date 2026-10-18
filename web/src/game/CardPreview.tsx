@@ -4,7 +4,7 @@ import type { Card, Game, Prompt } from '../types';
 import { rulesToHtml } from '../util';
 import { CardFace } from './CardFace';
 
-function findCard(id: string | undefined, game: Game | undefined, prompt: Prompt | undefined): Card | undefined {
+export function findCard(id: string | undefined, game: Game | undefined, prompt: Prompt | undefined): Card | undefined {
   if (!id || !game) return undefined;
   const pools: Card[][] = [game.hand, game.stack, prompt?.cards1 ?? [], prompt?.cards2 ?? []];
   for (const p of game.players) pools.push(p.battlefield, p.graveyard, p.exile, p.command);
