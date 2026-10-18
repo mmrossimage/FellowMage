@@ -9,6 +9,8 @@ import { Arrows } from './Arrows';
 import { Battlefield } from './Battlefield';
 import { CardPreview } from './CardPreview';
 import { ExileZones } from './ExileZones';
+import { GameMenu, useSkipHotkeys } from './GameMenu';
+import { VisibleHands } from './VisibleHands';
 import { seatsFromMe } from './commander';
 import { PromptDialogs } from './Dialogs';
 import { Hand, OpponentHand } from './Hand';
@@ -22,6 +24,7 @@ export function GameBoard() {
   const result = useStore((s) => s.result);
   const gameOver = useStore((s) => s.gameOver);
   const leaveGame = useStore((s) => s.leaveGame);
+  useSkipHotkeys();
 
   if (!game) {
     return (
@@ -44,12 +47,16 @@ export function GameBoard() {
           <span className="hidden font-display text-lg font-bold tracking-wider text-ember-300 xl:inline">FellowMage</span>
           <PhaseTracker />
           <div className="flex gap-2">
-            <button
-              onClick={() => confirm('Conceder a partida?') && send({ t: 'concede' })}
-              className="rounded-lg px-3 py-1.5 text-xs text-white/60 ring-1 ring-white/10 hover:bg-blood-500/20 hover:text-blood-400"
-            >
-              Conceder
-            </button>
+            <VisibleHands />
+            <GameMenu />
+            {!game.watching && (
+              <button
+                onClick={() => confirm('Conceder este jogo?') && send({ t: 'concede' })}
+                className="rounded-lg px-3 py-1.5 text-xs text-white/60 ring-1 ring-white/10 hover:bg-blood-500/20 hover:text-blood-400"
+              >
+                Conceder
+              </button>
+            )}
             {/* saída sempre disponível, como fechar a aba do jogo no cliente oficial (quitMatch) */}
             <button
               onClick={() => (gameOver || confirm('Sair da partida? Se ela ainda estiver em andamento, você a abandona.')) && leaveGame()}

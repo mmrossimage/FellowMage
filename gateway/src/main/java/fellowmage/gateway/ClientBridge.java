@@ -115,6 +115,8 @@ public final class ClientBridge implements MageClient {
     private volatile String lastPromptJson;
     private volatile boolean promptAnswered = true;
     private final java.util.Deque<String> chatHistory = new java.util.concurrent.ConcurrentLinkedDeque<>();
+    // pedidos do servidor aguardando o clique do jogador (id enviado ao navegador -> mensagem original)
+    private final Map<String, UserRequestMessage> userRequests = new java.util.concurrent.ConcurrentHashMap<>();
 
     private final CardCatalog catalog;
     private final DeckService deckService;
@@ -216,6 +218,10 @@ public final class ClientBridge implements MageClient {
                     leaveCurrentTable();
                 }
                 return;
+            case "userReply":
+                requireSession();
+                userReply(str(cmd, "id"), str(cmd, "action"));
+                return;
             case "sendChat": {
                 requireSession();
                 UUID chatId = chatIdFor(str(cmd, "chat"));
@@ -279,7 +285,8 @@ public final class ClientBridge implements MageClient {
                 session.sendPlayerManaType(gameId, playerId, ManaType.valueOf(str(cmd, "mana")));
                 break;
             case "action":
-                session.sendPlayerAction(PlayerAction.valueOf(str(cmd, "action")), gameId, null);
+                // data: id de jogador (ver mão, permissões) ou número de turnos (ROLLBACK_TURNS), como no PlayAreaPanel
+                session.sendPlayerAction(PlayerAction.valueOf(str(cmd, "action")), gameId, actionData(cmd));
                 break;
             case "concede":
                 session.sendPlayerAction(PlayerAction.CONCEDE, gameId, null);
@@ -869,8 +876,16 @@ public final class ClientBridge implements MageClient {
                 send(msg("serverMessage").with("message", String.valueOf(data)));
                 break;
             case USER_REQUEST_DIALOG: {
+                // pedidos com botões (voltar turnos, ver a mão, conceder...): a resposta volta por "userReply"
                 UserRequestMessage m = (UserRequestMessage) data;
-                send(msg("userRequest").with("title", m.getTitle()).with("message", m.getMessage()));
+                String id = UUID.randomUUID().toString();
+                userRequests.put(id, m);
+                List<Map<String, Object>> buttons = new java.util.ArrayList<>();
+                addButton(buttons, m.getButton1Text(), m.getButton1Action());
+                addButton(buttons, m.getButton2Text(), m.getButton2Action());
+                addButton(buttons, m.getButton3Text(), m.getButton3Action());
+                send(msg("userRequest").with("id", id).with("title", m.getTitle()).with("message", m.getMessage())
+                        .with("buttons", buttons));
                 break;
             }
             case SIDEBOARD: {
@@ -887,6 +902,58 @@ public final class ClientBridge implements MageClient {
             default:
                 // JOINED_TABLE, torneios, draft etc.: ainda não suportados no cliente web
                 send(msg("event").with("method", callback.getMethod().name()));
+        }
+    }
+
+    private static void addButton(List<Map<String, Object>> buttons, String text, PlayerAction action) {
+        if (text != null && !text.isEmpty()) {
+            Map<String, Object> b = new LinkedHashMap<>();
+            b.put("text", text);
+            b.put("action", action == null ? null : action.name());
+            buttons.add(b);
+        }
+    }
+
+    /** Resposta a um USER_REQUEST_DIALOG (mesma lógica de MageFrame.sendUserReplay no cliente oficial). */
+    private void userReply(String id, String actionName) {
+        UserRequestMessage m = id == null ? null : userRequests.remove(id);
+        if (m == null || actionName == null) {
+            return;
+        }
+        PlayerAction action = PlayerAction.valueOf(actionName);
+        switch (action) {
+            case CLIENT_CONCEDE_GAME:
+                session.sendPlayerAction(PlayerAction.CONCEDE, m.getGameId(), null);
+                break;
+            case CLIENT_CONCEDE_MATCH:
+                session.quitMatch(m.getGameId());
+                break;
+            case CLIENT_STOP_WATCHING:
+                session.stopWatching(m.getGameId());
+                break;
+            case CLIENT_QUIT_TOURNAMENT:
+                session.quitTournament(m.getTournamentId());
+                break;
+            case CLIENT_QUIT_DRAFT_TOURNAMENT:
+                session.quitDraft(m.getTournamentId());
+                break;
+            case CLIENT_REMOVE_TABLE:
+                session.removeTable(m.getRoomId(), m.getTableId());
+                break;
+            case CLIENT_REPLAY_ACTION:
+                session.stopReplay(m.getGameId());
+                break;
+            case CLIENT_DOWNLOAD_SYMBOLS:
+            case CLIENT_DOWNLOAD_CARD_IMAGES:
+            case CLIENT_DISCONNECT_FULL:
+            case CLIENT_DISCONNECT_KEEP_GAMES:
+            case CLIENT_EXIT_FULL:
+            case CLIENT_EXIT_KEEP_GAMES:
+            case CLIENT_RECONNECT:
+                // ações locais do cliente Swing, sem equivalente no navegador
+                break;
+            default:
+                session.sendPlayerAction(action, m.getGameId(), m.getRelatedUserId());
         }
     }
 
@@ -1039,6 +1106,14 @@ public final class ClientBridge implements MageClient {
                 chatHistory.pollFirst();
             }
         }
+    }
+
+    private static Object actionData(JsonObject cmd) {
+        if (!cmd.has("data") || cmd.get("data").isJsonNull()) {
+            return null;
+        }
+        com.google.gson.JsonPrimitive p = cmd.getAsJsonPrimitive("data");
+        return p.isNumber() ? (Object) p.getAsInt() : UUID.fromString(p.getAsString());
     }
 
     private static String str(JsonObject o, String key) {

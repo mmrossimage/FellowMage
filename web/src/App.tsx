@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect } from 'react';
+import { UserRequestDialog } from './components/UserRequestDialog';
 import { GameBoard } from './game/GameBoard';
 import { WaitingRoom } from './lobby/WaitingRoom';
 import { ConnectScreen } from './screens/ConnectScreen';
@@ -21,6 +22,7 @@ export default function App() {
       ) : (
         <ConnectScreen />
       )}
+      <UserRequestDialog />
       <Toast />
     </div>
   );

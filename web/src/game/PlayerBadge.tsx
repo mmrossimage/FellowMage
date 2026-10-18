@@ -65,6 +65,12 @@ export function PlayerBadge({ player, align, compact = false }: Props) {
           {!player.human && <span className="rounded bg-white/10 px-1 text-[9px] uppercase tracking-wider text-white/60">IA</span>}
           {player.active && <span className="rounded bg-ember-500/20 px-1 text-[9px] uppercase tracking-wider text-ember-300">turno</span>}
           {player.left && <span className="rounded bg-blood-500/30 px-1 text-[9px] uppercase tracking-wider text-blood-400">fora</span>}
+          {!!player.winsNeeded && player.winsNeeded > 1 && (
+            <span className="rounded bg-white/10 px-1 text-[9px] tracking-wider text-white/60" title="Vitórias na partida">
+              {player.wins}/{player.winsNeeded}
+            </span>
+          )}
+          {!!game?.priorityTime && <PriorityClock player={player} />}
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-1 text-xs text-white/70">
           <Pill icon="📚" label="Grimório" value={player.library} />
@@ -217,6 +223,39 @@ function ZonePopover({ title, cards, onClose, align }: { title: string; cards: C
       </div>
       <ZoneCards cards={cards} />
     </motion.div>
+  );
+}
+
+/**
+ * Relógio de prioridade da mesa com limite de tempo. O servidor manda o tempo restante a cada
+ * atualização; entre elas a contagem corre aqui enquanto o relógio do jogador está ativo.
+ */
+function PriorityClock({ player }: { player: Player }) {
+  const [now, setNow] = useState(() => Date.now());
+  const base = useRef({ at: Date.now(), left: player.timeLeft });
+  useEffect(() => {
+    base.current = { at: Date.now(), left: player.timeLeft };
+  }, [player.timeLeft, player.timerActive]);
+  useEffect(() => {
+    if (!player.timerActive) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [player.timerActive]);
+  const elapsed = player.timerActive ? Math.floor((now - base.current.at) / 1000) : 0;
+  const left = Math.max(0, base.current.left - elapsed);
+  const mm = Math.floor(left / 60);
+  const ss = String(left % 60).padStart(2, '0');
+  return (
+    <span
+      title={`Tempo de prioridade restante${player.bufferLeft ? ` (+${player.bufferLeft}s extra por ação)` : ''}`}
+      className={cx(
+        'rounded px-1 text-[10px] font-semibold tabular-nums',
+        player.timerActive ? 'bg-arcane-400/20 text-arcane-300' : 'bg-white/10 text-white/50',
+        left < 60 && 'bg-blood-500/30 text-blood-400',
+      )}
+    >
+      ⏱ {mm}:{ss}
+    </span>
   );
 }
 

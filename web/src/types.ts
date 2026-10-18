@@ -136,6 +136,13 @@ export type Player = {
   priority: boolean;
   left: boolean;
   timeLeft: number;
+  bufferLeft: number;
+  timerActive: boolean;
+  /** ações que podem ser desfeitas (UNDO) */
+  statesSaved: number;
+  wins: number;
+  winsNeeded: number;
+  passing: { turn: boolean; endOfTurn: boolean; nextMain: boolean; allTurns: boolean; stack: boolean; endStepBeforeMyTurn: boolean };
   monarch: boolean;
   initiative: boolean;
   counters: Counter[];
@@ -146,6 +153,13 @@ export type Player = {
   battlefield: Permanent[];
   topCard?: Card | null;
 };
+
+/** botão de um pedido do servidor (USER_REQUEST_DIALOG); action = PlayerAction do XMage */
+export type UserRequestButton = { text: string; action: string | null };
+export type UserRequest = { id: string; title: string; message: string; buttons: UserRequestButton[] };
+
+/** carta conhecida só por set/número (mãos reveladas por permissão) */
+export type SimpleCard = { id: string; set: string; num: string };
 
 export type CombatGroup = {
   defenderId: string;
@@ -171,6 +185,14 @@ export type Game = {
   revealed: { name: string; cards: Card[] }[];
   lookedAt: { name: string; count: number }[];
   playable: string[];
+  /** segundos de prioridade por jogador (0 = mesa sem limite de tempo) */
+  priorityTime: number;
+  bufferTime: number;
+  rollbackAllowed: boolean;
+  /** mãos de outros jogadores que podemos ver (por nome) */
+  visibleHands: Record<string, SimpleCard[]>;
+  /** assistindo como espectador */
+  watching: boolean;
 };
 
 export type PromptKind =
@@ -273,7 +295,7 @@ export type ServerMsg =
   | { t: 'gameError'; message: string }
   | { t: 'serverMessage'; message: string }
   | { t: 'userMessage'; lines: string[] }
-  | { t: 'userRequest'; title: string; message: string }
+  | { t: 'userRequest'; id: string; title: string; message: string; buttons: UserRequestButton[] }
   | { t: 'event'; method: string }
   | { t: 'cards'; reqId?: string; status: string; result: { total: number; offset: number; cards: CatalogCard[] } }
   | { t: 'userDecks'; decks: DeckSummary[] }

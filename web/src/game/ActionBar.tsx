@@ -66,7 +66,8 @@ export function ActionBar() {
     return () => window.removeEventListener('keydown', onKey);
   });
 
-  const myTurn = game?.players.find((p) => p.me)?.id === game?.activePlayerId;
+  const me = game?.players.find((p) => p.me);
+  const myTurn = me?.id === game?.activePlayerId;
   const message = prompt?.message ?? '';
   const second = opts['secondMessage'] as string | undefined;
 
@@ -103,6 +104,16 @@ export function ActionBar() {
           </button>
         ))}
       </div>
+
+      {/* desfazer: o servidor guarda estados das próprias ações enquanto a pilha está vazia (botão Undo do cliente oficial) */}
+      {waiting && (me?.statesSaved ?? 0) > 0 && !game?.stack.length && (
+        <button
+          onClick={() => action('UNDO')}
+          className="rounded-lg bg-black/40 px-2 py-1.5 text-[11px] text-white/70 ring-1 ring-white/10 transition hover:bg-white/10 hover:text-white"
+        >
+          ↶ Desfazer última ação
+        </button>
+      )}
 
       {waiting && prompt?.kind === 'select' && (
         <div className="flex gap-1.5 text-[11px]">

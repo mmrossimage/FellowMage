@@ -17,6 +17,8 @@ import mage.view.PermanentView;
 import mage.view.PlayerView;
 import mage.view.RevealedView;
 import mage.view.SeatView;
+import mage.view.SimpleCardView;
+import mage.view.SimpleCardsView;
 import mage.view.StackAbilityView;
 import mage.view.TableView;
 
@@ -54,7 +56,30 @@ public final class ViewMapper {
         m.put("revealed", g.getRevealed().stream().map(ViewMapper::revealed).collect(Collectors.toList()));
         m.put("lookedAt", g.getLookedAt().stream().map(ViewMapper::lookedAt).collect(Collectors.toList()));
         m.put("playable", playable == null ? new ArrayList<>() : new ArrayList<>(playable.getObjects().keySet()));
+        // limite de tempo da mesa (segundos de prioridade por jogador e tempo extra por ação); 0 = sem relógio
+        m.put("priorityTime", g.getPriorityTime());
+        m.put("bufferTime", g.getBufferTime());
+        m.put("rollbackAllowed", g.isRollbackTurnsAllowed());
+        // mãos que podemos ver: de oponentes que deram permissão (jogador) ou de quem assistimos (espectador)
+        Map<String, Object> hands = new LinkedHashMap<>();
+        g.getOpponentHands().forEach((name, cards) -> hands.put(name, simpleCards(cards)));
+        g.getWatchedHands().forEach((name, cards) -> hands.put(name, simpleCards(cards)));
+        m.put("visibleHands", hands);
+        m.put("watching", g.getMyPlayer() == null);
         return m;
+    }
+
+    /** Cartas vistas só por set/número (SimpleCardView): o navegador busca a imagem no Scryfall. */
+    private static List<Map<String, Object>> simpleCards(SimpleCardsView cards) {
+        List<Map<String, Object>> res = new ArrayList<>();
+        for (SimpleCardView c : cards.values()) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", c.getId());
+            m.put("set", c.getExpansionSetCode());
+            m.put("num", c.getCardNumber());
+            res.add(m);
+        }
+        return res;
     }
 
     /** Mesa do lobby (lista de mesas e sala de espera). */
@@ -102,6 +127,20 @@ public final class ViewMapper {
         m.put("priority", p.hasPriority());
         m.put("left", p.hasLeft());
         m.put("timeLeft", p.getPriorityTimeLeftSecs());
+        m.put("bufferLeft", p.getBufferTimeLeft());
+        m.put("timerActive", p.isTimerActive());
+        // ações que o jogador pode desfazer (botão Undo do cliente oficial, só com a pilha vazia)
+        m.put("statesSaved", p.getStatesSavedSize());
+        m.put("wins", p.getWins());
+        m.put("winsNeeded", p.getWinsNeeded());
+        Map<String, Boolean> passing = new LinkedHashMap<>();
+        passing.put("turn", p.isPassedTurn());
+        passing.put("endOfTurn", p.isPassedUntilEndOfTurn());
+        passing.put("nextMain", p.isPassedUntilNextMain());
+        passing.put("allTurns", p.isPassedAllTurns());
+        passing.put("stack", p.isPassedUntilStackResolved());
+        passing.put("endStepBeforeMyTurn", p.isPassedUntilEndStepBeforeMyTurn());
+        m.put("passing", passing);
         m.put("monarch", p.isMonarch());
         m.put("initiative", p.isInitiative());
         m.put("counters", counters(p.getCounters()));

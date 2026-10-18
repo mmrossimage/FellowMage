@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { sessionSet } from './util';
-import type { ChatKind, CreateTableOptions, DeckSummary, FormatId, Game, LobbyOptions, LobbyTable, Prompt, ServerMsg, StopKey, Stops } from './types';
+import type { ChatKind, CreateTableOptions, DeckSummary, FormatId, Game, LobbyOptions, LobbyTable, Prompt, ServerMsg, StopKey, Stops, UserRequest } from './types';
 
 type Status = 'offline' | 'connecting' | 'online' | 'starting' | 'playing';
 /** telas dentro do app (fora da partida) */
@@ -11,6 +11,17 @@ export type Mode = 'online' | 'local';
 export type LogLine = { id: number; html: string; turnInfo?: string; kind: 'game' | 'chat' | 'system' | 'error'; user?: string };
 /** mensagem dos chats do lobby (sala e mesa) */
 export type ChatLine = { id: number; user?: string; html: string; type: string };
+
+/** mesmos padrões do menu do jogador no cliente oficial (PlayAreaPanel) */
+export type GamePrefs = { manaAuto: boolean; manaAutoRestricted: boolean; firstManaAbility: boolean; allowHandRequests: boolean; holdPriority: boolean };
+const DEFAULT_GAME_PREFS: GamePrefs = { manaAuto: true, manaAutoRestricted: true, firstManaAbility: false, allowHandRequests: true, holdPriority: false };
+const GAME_PREF_ACTIONS: Record<keyof GamePrefs, [string, string]> = {
+  manaAuto: ['MANA_AUTO_PAYMENT_ON', 'MANA_AUTO_PAYMENT_OFF'],
+  manaAutoRestricted: ['MANA_AUTO_PAYMENT_RESTRICTED_ON', 'MANA_AUTO_PAYMENT_RESTRICTED_OFF'],
+  firstManaAbility: ['USE_FIRST_MANA_ABILITY_ON', 'USE_FIRST_MANA_ABILITY_OFF'],
+  allowHandRequests: ['PERMISSION_REQUESTS_ALLOWED_ON', 'PERMISSION_REQUESTS_ALLOWED_OFF'],
+  holdPriority: ['HOLD_PRIORITY', 'UNHOLD_PRIORITY'],
+};
 
 type State = {
   status: Status;
@@ -68,7 +79,14 @@ type State = {
   respondBoolean: (value: boolean) => void;
   respondInteger: (value: number) => void;
   respondString: (value: string | null) => void;
-  action: (action: string) => void;
+  /** PlayerAction do XMage; data = id de jogador ou número de turnos, conforme a ação */
+  action: (action: string, data?: string | number) => void;
+  /** pedidos do servidor com botões (voltar turnos, ver mão...), mostrados um por vez */
+  userRequests: UserRequest[];
+  userReply: (id: string, action: string | null) => void;
+  /** opções da partida no servidor; o XMage não as devolve, então o cliente guarda o último valor enviado */
+  gamePrefs: GamePrefs;
+  setGamePref: (key: keyof GamePrefs, value: boolean) => void;
   setHovered: (id?: string) => void;
   dismissToast: () => void;
   leaveGame: () => void;
@@ -140,7 +158,8 @@ export const useStore = create<State>((set, get) => {
         pushLog({ kind: 'system', html: `${m.format}: <b>${m.deck}</b> contra ${m.opponents.map((o) => `<b>${o}</b>`).join(', ')}` });
         break;
       case 'gameStarted':
-        set({ status: 'playing', gameId: m.gameId, playerId: m.playerId, result: undefined, gameOver: undefined, log: [] });
+        // cada jogo começa com as opções padrão no servidor
+        set({ status: 'playing', gameId: m.gameId, playerId: m.playerId, result: undefined, gameOver: undefined, log: [], gamePrefs: DEFAULT_GAME_PREFS });
         break;
       case 'game': {
         // GAME_UPDATE sem prompt não altera o pedido pendente
@@ -205,9 +224,12 @@ export const useStore = create<State>((set, get) => {
       case 'userMessage':
         set({ toast: { text: m.lines.join(' — '), tone: 'info' } });
         break;
-      case 'userRequest':
-        set({ toast: { text: `${m.title}: ${m.message}`, tone: 'info' } });
+      case 'userRequest': {
+        const { t: _t, ...req } = m;
+        if (req.buttons.length) set((s) => ({ userRequests: [...s.userRequests, req] }));
+        else set({ toast: { text: `${m.title}: ${m.message}`, tone: 'info' } });
         break;
+      }
       case 'event':
         break;
     }
@@ -322,7 +344,17 @@ export const useStore = create<State>((set, get) => {
       set({ waiting: false });
       get().send({ t: 'sendString', value });
     },
-    action: (action) => get().send({ t: 'action', action }),
+    action: (action, data) => get().send({ t: 'action', action, data }),
+    userRequests: [],
+    userReply: (id, action) => {
+      set((s) => ({ userRequests: s.userRequests.filter((r) => r.id !== id) }));
+      get().send({ t: 'userReply', id, action });
+    },
+    gamePrefs: DEFAULT_GAME_PREFS,
+    setGamePref: (key, value) => {
+      set((s) => ({ gamePrefs: { ...s.gamePrefs, [key]: value } }));
+      get().action(GAME_PREF_ACTIONS[key][value ? 0 : 1]);
+    },
 
     setHovered: (id) => set({ hovered: id }),
     dismissToast: () => set({ toast: undefined }),
