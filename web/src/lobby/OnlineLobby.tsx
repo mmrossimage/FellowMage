@@ -4,6 +4,7 @@ import type { LobbyTable } from '../types';
 import { cx } from '../util';
 import { LobbySide, ServerNews } from './LobbySide';
 import { CreateTableDialog, JoinTableDialog } from './TableDialogs';
+import { CreateTournamentDialog } from './TournamentDialog';
 import { SKILL_LABEL, TABLE_STATE, ago, canJoin, filledSeats } from './tables';
 
 // mesmo intervalo do cliente oficial (TablesPanel.REFRESH_ACTIVE_TABLES_SECS)
@@ -22,6 +23,7 @@ export function OnlineLobby() {
   const [deckType, setDeckType] = useState('');
   const [joining, setJoining] = useState<LobbyTable>();
   const [creating, setCreating] = useState(false);
+  const [creatingTourney, setCreatingTourney] = useState(false);
 
   useEffect(() => {
     send({ t: 'lobbyOptions' });
@@ -52,12 +54,20 @@ export function OnlineLobby() {
               {serverVersion && <span className="text-white/35"> · {serverVersion}</span>} · {openCount} aguardando jogadores · {tables.length} no total
             </p>
           </div>
+          <div className="flex gap-2">
+          <button
+            onClick={() => setCreatingTourney(true)}
+            className="rounded-xl bg-white/10 px-5 py-2.5 font-display text-sm font-bold uppercase tracking-wider text-white ring-1 ring-white/15 hover:bg-white/20"
+          >
+            + Torneio
+          </button>
           <button
             onClick={() => setCreating(true)}
             className="rounded-xl bg-gradient-to-b from-ember-400 to-ember-500 px-5 py-2.5 font-display text-sm font-bold uppercase tracking-wider text-ink-950 hover:brightness-110"
           >
             + Nova mesa
           </button>
+          </div>
         </div>
 
         <ServerNews />
@@ -92,6 +102,7 @@ export function OnlineLobby() {
 
       {joining && <JoinTableDialog table={joining} onClose={() => setJoining(undefined)} />}
       {creating && <CreateTableDialog onClose={() => setCreating(false)} />}
+      {creatingTourney && <CreateTournamentDialog onClose={() => setCreatingTourney(false)} />}
     </div>
   );
 }

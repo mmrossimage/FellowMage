@@ -30,7 +30,13 @@ import mage.view.GameClientMessage;
 import mage.view.GameEndView;
 import mage.view.GameTypeView;
 import mage.view.GameView;
+import mage.game.draft.DraftOptions;
+import mage.game.tournament.TournamentOptions;
+import mage.view.DraftClientMessage;
+import mage.view.DraftPickView;
 import mage.view.MatchView;
+import mage.view.TournamentTypeView;
+import mage.view.TournamentView;
 import mage.view.RoomUsersView;
 import mage.view.TableClientMessage;
 import mage.view.UsersView;
@@ -126,6 +132,11 @@ public final class ClientBridge implements MageClient {
     // assistindo (espectador) a gameId, sem jogador próprio
     private volatile boolean watching;
     private volatile UUID replayId;
+    // torneio em andamento (e o draft dele, se houver); o chat do torneio aparece como chat da mesa
+    private volatile UUID tournamentId;
+    private volatile UUID tournamentChatId;
+    private volatile UUID draftId;
+    private volatile String lastDraftJson;
 
     private final CardCatalog catalog;
     private final DeckService deckService;
@@ -203,7 +214,38 @@ public final class ClientBridge implements MageClient {
                 return;
             case "joinTable":
                 requireSession();
-                joinTable(UUID.fromString(str(cmd, "tableId")), str(cmd, "deck"), str(cmd, "password"));
+                joinTable(UUID.fromString(str(cmd, "tableId")), str(cmd, "deck"), str(cmd, "password"),
+                        cmd.has("tournament") && cmd.get("tournament").getAsBoolean());
+                return;
+            case "createTournament":
+                requireSession();
+                createTournament(cmd);
+                return;
+            case "tournamentInfo":
+                requireSession();
+                sendTournamentInfo();
+                return;
+            case "draftPick": {
+                // escolher a carta do booster (DraftPanel: sendCardPick; devolve as escolhas atualizadas)
+                requireSession();
+                UUID id = draftId;
+                if (id != null) {
+                    DraftPickView v = session.sendCardPick(id, UUID.fromString(str(cmd, "cardId")), new java.util.HashSet<>());
+                    if (v != null) {
+                        send(msg("draftPicked").with("picks", Tournaments.cards(v.getPicks(), catalog)));
+                    }
+                }
+                return;
+            }
+            case "draftMark":
+                requireSession();
+                if (draftId != null) {
+                    session.sendCardMark(draftId, UUID.fromString(str(cmd, "cardId")));
+                }
+                return;
+            case "quitTournament":
+                requireSession();
+                quitTournament();
                 return;
             case "tableInfo":
                 requireSession();
@@ -211,8 +253,11 @@ public final class ClientBridge implements MageClient {
                 return;
             case "startMatch":
                 requireSession();
-                if (currentTableId != null && !session.startMatch(roomId, currentTableId)) {
-                    sendError("Não foi possível começar a partida. " + session.getLastError());
+                if (currentTableId != null) {
+                    boolean tourney = session.getTable(roomId, currentTableId).map(TableView::isTournament).orElse(false);
+                    if (!(tourney ? session.startTournament(roomId, currentTableId) : session.startMatch(roomId, currentTableId))) {
+                        sendError("Não foi possível começar. " + session.getLastError());
+                    }
                 }
                 return;
             case "leaveTable":
@@ -658,7 +703,8 @@ public final class ClientBridge implements MageClient {
             // ainda na sala de espera da mesa de outro jogador
             session.leaveTable(roomId, currentTableId);
         }
-        if (ownTableId != null) {
+        // durante um torneio a mesa dele continua (sair de um jogo não desfaz o torneio dos outros)
+        if (ownTableId != null && tournamentId == null) {
             session.removeTable(roomId, ownTableId);
             ownTableId = null;
         }
@@ -699,8 +745,101 @@ public final class ClientBridge implements MageClient {
         for (SkillLevel s : SkillLevel.values()) {
             skills.add(s.name());
         }
+        List<Map<String, Object>> sets = new java.util.ArrayList<>();
+        for (String[] s : catalog.getBoosterSets()) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("code", s[0]);
+            m.put("name", s[1]);
+            sets.add(m);
+        }
+        List<String> timings = new java.util.ArrayList<>();
+        for (DraftOptions.TimingOption t : DraftOptions.TimingOption.values()) {
+            if (t != DraftOptions.TimingOption.NONE) {
+                timings.add(t.name());
+            }
+        }
         send(msg("lobbyOptions").with("gameTypes", gameTypes).with("deckTypes", session.getDeckTypes())
-                .with("timeLimits", timeLimits).with("skillLevels", skills));
+                .with("timeLimits", timeLimits).with("skillLevels", skills)
+                .with("tournamentTypes", session.getTournamentTypes().stream().map(Tournaments::type).collect(java.util.stream.Collectors.toList()))
+                .with("tournamentGameTypes", session.getTournamentGameTypes().stream().map(GameTypeView::getName).collect(java.util.stream.Collectors.toList()))
+                .with("draftCubes", session.getDraftCubes()).with("boosterSets", sets).with("draftTimings", timings));
+    }
+
+    /** Cria a mesa do torneio, senta as IAs e entra (mesma ordem do NewTournamentDialog). */
+    private void createTournament(JsonObject cmd) throws Exception {
+        String typeName = str(cmd, "type");
+        TournamentTypeView type = session.getTournamentTypes().stream()
+                .filter(t -> t.getName().equals(typeName))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("tipo de torneio desconhecido: " + typeName));
+        TournamentOptions options = Tournaments.options(cmd, type, userName);
+        if (type.isLimited() && !type.isCubeBooster() && !type.isJumpstart() && options.getLimitedOptions().getSetCodes().isEmpty()) {
+            sendError("Escolha as coleções dos boosters.");
+            return;
+        }
+        String deckPath = str(cmd, "deck");
+        DeckCardLists deck = deckPath == null ? new DeckCardLists() : decks.load(deckPath);
+        leaveCurrentTable();
+        lastServerError = null;
+        TableView table = session.createTournamentTable(roomId, options);
+        if (table == null) {
+            if (lastServerError == null) {
+                sendError("O servidor recusou o torneio. " + session.getLastError());
+            }
+            return;
+        }
+        UUID tableId = table.getTableId();
+        long aiSeats = options.getPlayerTypes().stream().filter(p -> p != PlayerType.HUMAN).count();
+        for (int i = 1; i <= aiSeats; i++) {
+            if (!session.joinTournamentTable(roomId, tableId, "IA " + i, PlayerType.COMPUTER_MAD, 6, deck, "")) {
+                sendError("O servidor não aceitou a IA " + i + ". " + session.getLastError());
+                session.removeTable(roomId, tableId);
+                return;
+            }
+        }
+        if (!session.joinTournamentTable(roomId, tableId, userName, PlayerType.HUMAN, 1, deck, options.getPassword())) {
+            if (lastServerError == null) {
+                sendError("Não foi possível entrar no torneio. " + session.getLastError());
+            }
+            session.removeTable(roomId, tableId);
+            return;
+        }
+        ownTableId = tableId;
+        enterTable(tableId, deck);
+    }
+
+    private void sendTournamentInfo() throws Exception {
+        UUID id = tournamentId;
+        if (id == null) {
+            return;
+        }
+        TournamentView v = session.getTournament(id);
+        if (v != null) {
+            send(msg("tournamentInfo").with("tournament", Tournaments.tournament(v)));
+        }
+    }
+
+    private void quitTournament() {
+        if (draftId != null) {
+            session.quitDraft(draftId);
+        }
+        if (tournamentId != null) {
+            session.quitTournament(tournamentId);
+        }
+        endTournament();
+        ownTableId = null; // o torneio segue para os demais; o dono não o remove ao desistir
+        leaveCurrentTable();
+        send(msg("tournamentLeft"));
+    }
+
+    private void endTournament() {
+        if (tournamentChatId != null) {
+            session.leaveChat(tournamentChatId);
+        }
+        tournamentId = null;
+        tournamentChatId = null;
+        draftId = null;
+        lastDraftJson = null;
     }
 
     /** Cria uma mesa com todas as vagas para jogadores humanos e entra nela (como o "New Table" do cliente oficial). */
@@ -772,11 +911,16 @@ public final class ClientBridge implements MageClient {
         enterTable(table.getTableId(), deck);
     }
 
-    private void joinTable(UUID tableId, String deckPath, String password) throws Exception {
-        DeckCardLists deck = decks.load(deckPath);
+    private void joinTable(UUID tableId, String deckPath, String password, boolean tournament) throws Exception {
+        // torneio limitado: o deck sai do draft/selado, entra-se sem deck
+        DeckCardLists deck = deckPath == null && tournament ? new DeckCardLists() : decks.load(deckPath);
         leaveCurrentTable();
         lastServerError = null;
-        if (!session.joinTable(roomId, tableId, userName, PlayerType.HUMAN, 1, deck, password == null ? "" : password)) {
+        String pw = password == null ? "" : password;
+        boolean ok = tournament
+                ? session.joinTournamentTable(roomId, tableId, userName, PlayerType.HUMAN, 1, deck, pw)
+                : session.joinTable(roomId, tableId, userName, PlayerType.HUMAN, 1, deck, pw);
+        if (!ok) {
             if (lastServerError == null) {
                 sendError("O servidor recusou a entrada na mesa. " + session.getLastError());
             }
@@ -823,7 +967,7 @@ public final class ClientBridge implements MageClient {
             return roomChatId;
         }
         if ("table".equals(kind)) {
-            return tableChatId;
+            return tournamentChatId != null ? tournamentChatId : tableChatId;
         }
         if ("game".equals(kind) && gameId != null) {
             return session.getGameChatId(gameId).orElse(null);
@@ -835,7 +979,7 @@ public final class ClientBridge implements MageClient {
         if (chatId != null && chatId.equals(roomChatId)) {
             return "room";
         }
-        if (chatId != null && chatId.equals(tableChatId)) {
+        if (chatId != null && (chatId.equals(tableChatId) || chatId.equals(tournamentChatId))) {
             return "table";
         }
         return "game";
@@ -873,6 +1017,15 @@ public final class ClientBridge implements MageClient {
                     .with("stops", stopsToJson()).with("resumed", true).with("inGame", gameId != null));
             send(msg("decks").with("decks", decks.list()));
             sendDeckBuilding();
+            if (tournamentId != null) {
+                sendRaw(GSON.toJson(msg("tournamentStarted").with("tournamentId", tournamentId).body));
+                if (draftId != null) {
+                    sendRaw(GSON.toJson(msg("draftStarted").with("draftId", draftId).body));
+                    if (lastDraftJson != null) {
+                        sendRaw(lastDraftJson);
+                    }
+                }
+            }
             if (gameId != null) {
                 // sendRaw: não passar por remember(), que limparia o estado guardado
                 sendRaw(GSON.toJson(msg("gameStarted").with("gameId", gameId).with("playerId", playerId).with("watching", watching).body));
@@ -943,6 +1096,53 @@ public final class ClientBridge implements MageClient {
                 send(msg("gameStarted").with("gameId", gameId).with("playerId", null).with("watching", true));
                 break;
             }
+            case START_TOURNAMENT:
+            case SHOW_TOURNAMENT: {
+                // painel do torneio (TournamentPanel): entra no torneio e no chat dele; a tabela é consultada por polling
+                tournamentId = callback.getObjectId();
+                session.joinTournament(tournamentId);
+                tournamentChatId = session.getTournamentChatId(tournamentId).orElse(null);
+                if (tournamentChatId != null) {
+                    session.joinChat(tournamentChatId);
+                }
+                send(msg("tournamentStarted").with("tournamentId", tournamentId));
+                break;
+            }
+            case TOURNAMENT_INIT:
+            case TOURNAMENT_UPDATE:
+                if (data instanceof TournamentView) {
+                    send(msg("tournamentInfo").with("tournament", Tournaments.tournament((TournamentView) data)));
+                }
+                break;
+            case TOURNAMENT_OVER:
+                send(msg("tournamentOver").with("message", String.valueOf(data)));
+                break;
+            case START_DRAFT:
+                draftId = callback.getObjectId();
+                session.joinDraft(draftId);
+                send(msg("draftStarted").with("draftId", draftId));
+                break;
+            case DRAFT_INIT:
+            case DRAFT_PICK:
+            case DRAFT_UPDATE: {
+                DraftClientMessage m = (DraftClientMessage) data;
+                Map<String, Object> d = Tournaments.draft(m.getDraftView(), m.getDraftPickView(), catalog);
+                String json = GSON.toJson(msg("draft").with("method", callback.getMethod().name()).with("draft", d).body);
+                if (m.getDraftPickView() != null) {
+                    lastDraftJson = json;
+                }
+                sendRaw(json);
+                if (m.getDraftPickView() != null && !m.getDraftPickView().getBooster().isEmpty()) {
+                    // confirma o recebimento, senão o servidor reenvia o booster (DraftPanel.loadBooster)
+                    session.setBoosterLoaded(draftId);
+                }
+                break;
+            }
+            case DRAFT_OVER:
+                draftId = null;
+                lastDraftJson = null;
+                send(msg("draftOver"));
+                break;
             case REPLAY_GAME:
                 replayId = callback.getObjectId();
                 session.startReplay(replayId);

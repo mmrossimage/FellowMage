@@ -6,17 +6,17 @@ import type { CreateTableOptions, LobbyTable } from '../types';
 import { cx } from '../util';
 import { SKILL_LABEL, filledSeats, sortDecks } from './tables';
 
-const LAST_DECK = 'fm.onlineDeck';
+export const LAST_DECK = 'fm.onlineDeck';
 const LAST_TABLE = 'fm.onlineTable';
 
-function lsGet(key: string) {
+export function lsGet(key: string) {
   try {
     return localStorage.getItem(key);
   } catch {
     return null;
   }
 }
-function lsSet(key: string, value: string) {
+export function lsSet(key: string, value: string) {
   try {
     localStorage.setItem(key, value);
   } catch {
@@ -24,7 +24,7 @@ function lsSet(key: string, value: string) {
   }
 }
 
-function Modal({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+export function Modal({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   return (
     <AnimatePresence>
       <motion.div
@@ -45,7 +45,7 @@ function Modal({ children, onClose }: { children: React.ReactNode; onClose: () =
   );
 }
 
-function Field({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
+export function Field({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
   return (
     <label className={cx('block', className)}>
       <span className="mb-1 block text-xs uppercase tracking-wider text-white/50">{label}</span>
@@ -54,7 +54,7 @@ function Field({ label, children, className }: { label: string; children: React.
   );
 }
 
-function Actions({ busy, okLabel, onCancel, disabled }: { busy: boolean; okLabel: string; onCancel: () => void; disabled?: boolean }) {
+export function Actions({ busy, okLabel, onCancel, disabled }: { busy: boolean; okLabel: string; onCancel: () => void; disabled?: boolean }) {
   return (
     <div className="mt-6 flex justify-end gap-2">
       <button type="button" onClick={onCancel} className="rounded-xl bg-white/10 px-5 py-2.5 text-sm text-white ring-1 ring-white/15 hover:bg-white/20">
@@ -78,15 +78,17 @@ export function JoinTableDialog({ table, onClose }: { table: LobbyTable; onClose
   const pool = useMemo(() => sortDecks(decks, table.deckType), [decks, table.deckType]);
   const [deck, setDeck] = useState(() => lsGet(LAST_DECK) ?? '');
   const [password, setPassword] = useState('');
-  const validDeck = pool.includes(deck);
+  // torneio limitado (draft/selado): o deck é montado depois, com as cartas abertas
+  const noDeck = table.tournament && table.limited;
+  const validDeck = noDeck || pool.includes(deck);
 
   return (
     <Modal onClose={onClose}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          lsSet(LAST_DECK, deck);
-          joinTable(table.id, deck, password);
+          if (!noDeck) lsSet(LAST_DECK, deck);
+          joinTable(table.id, noDeck ? undefined : deck, password, table.tournament);
         }}
       >
         <h2 className="font-display text-2xl font-bold text-ember-300">Entrar na mesa</h2>
@@ -95,10 +97,14 @@ export function JoinTableDialog({ table, onClose }: { table: LobbyTable; onClose
           {table.deckType} · {table.gameType} · {filledSeats(table)}/{table.seats.length} jogadores · criada por {table.owner}
         </p>
 
-        <div className="mt-5">
-          <DeckPicker title="Seu deck" decks={pool} value={deck} onChange={setDeck} allowRandom={false} heightClass="h-56" />
-          <p className="mt-2 text-xs text-white/40">O servidor confere se o deck é válido para “{table.deckType}”.</p>
-        </div>
+        {noDeck ? (
+          <p className="mt-5 rounded-xl bg-black/30 p-4 text-sm text-white/70">Torneio limitado: você monta o deck com as cartas abertas no draft ou no selado.</p>
+        ) : (
+          <div className="mt-5">
+            <DeckPicker title="Seu deck" decks={pool} value={deck} onChange={setDeck} allowRandom={false} heightClass="h-56" />
+            <p className="mt-2 text-xs text-white/40">O servidor confere se o deck é válido para “{table.deckType}”.</p>
+          </div>
+        )}
         {table.passworded && (
           <Field label="Senha da mesa" className="mt-4 max-w-xs">
             <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" className="input" />

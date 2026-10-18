@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect } from 'react';
 import { UserRequestDialog } from './components/UserRequestDialog';
 import { DeckBuildScreen } from './deck/DeckBuildScreen';
+import { DraftScreen, TournamentScreen } from './lobby/TournamentScreen';
 import { GameBoard } from './game/GameBoard';
 import { WaitingRoom } from './lobby/WaitingRoom';
 import { ConnectScreen } from './screens/ConnectScreen';
@@ -13,10 +14,16 @@ export default function App() {
   const status = useStore((s) => s.status);
   const inTable = useStore((s) => !!s.table);
   const hasDeckBuild = useStore((s) => !!s.deckBuild);
+  const inTournament = useStore((s) => !!s.tournament);
+  const inDraft = useStore((s) => !!s.draft);
   return (
     <div className="h-full w-full">
       {status === 'playing' ? (
         <GameBoard />
+      ) : status === 'online' && inDraft ? (
+        <DraftScreen />
+      ) : status === 'online' && inTournament ? (
+        <TournamentScreen />
       ) : status === 'online' && inTable ? (
         <WaitingRoom />
       ) : status === 'online' || status === 'starting' ? (

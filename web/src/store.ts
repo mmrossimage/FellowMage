@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { sessionSet } from './util';
-import type { ChatKind, CreateTableOptions, DeckSummary, FormatId, Game, LobbyOptions, LobbyTable, Prompt, ServerMsg, StopKey, Stops, UserRequest, DeckBuild, RoomUser, FinishedMatch } from './types';
+import type { ChatKind, CreateTableOptions, DeckSummary, FormatId, Game, LobbyOptions, LobbyTable, Prompt, ServerMsg, StopKey, Stops, UserRequest, DeckBuild, RoomUser, FinishedMatch, TournamentInfo, DraftState, CreateTournamentOptions } from './types';
 
 type Status = 'offline' | 'connecting' | 'online' | 'starting' | 'playing';
 /** telas dentro do app (fora da partida) */
@@ -65,6 +65,11 @@ type State = {
   /** sala de espera: a mesa em que entramos (id já conhecido antes do primeiro tableInfo) */
   table?: { id: string; info?: LobbyTable; owner: boolean };
   chats: Record<'room' | 'table', ChatLine[]>;
+  /** torneio em que estamos (tabela e rodadas chegam por polling, como no TournamentPanel) */
+  tournament?: { id: string; info?: TournamentInfo; over?: string };
+  /** draft em andamento: booster atual, escolhas e relógio (`since` = quando o booster chegou) */
+  draft?: DraftState & { since: number };
+  createTournament: (opts: CreateTournamentOptions) => void;
   roomUsers: RoomUser[];
   finishedMatches: FinishedMatch[];
   /** avisos do servidor (mensagem do dia) */
@@ -102,7 +107,7 @@ type State = {
   dismissToast: () => void;
   leaveGame: () => void;
   createTable: (opts: CreateTableOptions) => void;
-  joinTable: (tableId: string, deck: string, password: string) => void;
+  joinTable: (tableId: string, deck: string | undefined, password: string, tournament?: boolean) => void;
   leaveTable: () => void;
   sendChat: (chat: ChatKind, text: string) => void;
 };
@@ -180,6 +185,35 @@ export const useStore = create<State>((set, get) => {
         break;
       case 'replayDone':
         set({ status: 'online', replay: false, game: undefined, gameOver: undefined });
+        break;
+      case 'tournamentStarted':
+        // a sala de espera da mesa do torneio dá lugar ao painel do torneio
+        set({ tournament: { id: m.tournamentId, info: get().tournament?.info }, table: undefined, tableBusy: false });
+        break;
+      case 'tournamentInfo':
+        set((s) => ({ tournament: s.tournament ? { ...s.tournament, info: m.tournament } : s.tournament }));
+        break;
+      case 'tournamentOver':
+        set((s) => ({ tournament: s.tournament ? { ...s.tournament, over: m.message } : s.tournament }));
+        break;
+      case 'tournamentLeft':
+        set({ tournament: undefined, draft: undefined, deckBuild: undefined });
+        break;
+      case 'draftStarted':
+        set({ draft: { since: Date.now() } });
+        break;
+      case 'draft': {
+        const prev = get().draft;
+        const fresh = m.draft.booster !== undefined;
+        set({ draft: { ...prev, ...m.draft, since: fresh ? Date.now() : (prev?.since ?? Date.now()) } });
+        break;
+      }
+      case 'draftPicked':
+        // a carta escolhida sai do booster até o próximo chegar
+        set((s) => (s.draft ? { draft: { ...s.draft, picks: m.picks, booster: [] } } : {}));
+        break;
+      case 'draftOver':
+        set({ draft: undefined });
         break;
       case 'roomUsers':
         set({ roomUsers: m.users });
@@ -352,7 +386,7 @@ export const useStore = create<State>((set, get) => {
         ws.close();
         ws = undefined;
       }
-      set({ status: 'offline', view: 'home', mode: undefined, localServerStarting: false, table: undefined, tables: [], chats: { room: [], table: [] }, lobbyOptions: undefined, game: undefined, prompt: undefined, waiting: false, server: undefined, clientVersion: undefined, serverVersion: undefined, deckBuild: undefined, userRequests: [] });
+      set({ status: 'offline', view: 'home', mode: undefined, localServerStarting: false, table: undefined, tables: [], chats: { room: [], table: [] }, lobbyOptions: undefined, game: undefined, prompt: undefined, waiting: false, server: undefined, clientVersion: undefined, serverVersion: undefined, deckBuild: undefined, userRequests: [], tournament: undefined, draft: undefined });
     },
 
     startGame: (format, deck, opponents, aiSkill) => {
@@ -413,9 +447,13 @@ export const useStore = create<State>((set, get) => {
       set({ tableBusy: true });
       get().send({ t: 'createTable', ...opts });
     },
-    joinTable: (tableId, deck, password) => {
+    createTournament: (opts) => {
       set({ tableBusy: true });
-      get().send({ t: 'joinTable', tableId, deck, password });
+      get().send({ t: 'createTournament', ...opts });
+    },
+    joinTable: (tableId, deck, password, tournament) => {
+      set({ tableBusy: true });
+      get().send({ t: 'joinTable', tableId, deck, password, tournament });
     },
     leaveTable: () => {
       get().send({ t: 'leaveTable' });

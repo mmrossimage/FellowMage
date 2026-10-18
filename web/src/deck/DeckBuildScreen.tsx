@@ -27,6 +27,7 @@ const TITLES = {
 export function DeckBuildScreen() {
   const build = useStore((s) => s.deckBuild)!;
   const send = useStore((s) => s.send);
+  const inTournament = useStore((s) => !!s.tournament);
   const all = useMemo(() => [...build.main, ...build.side], [build]);
   const [main, setMain] = useState<Set<string>>(() => new Set(build.main.map((c) => c.id)));
   const [basics, setBasics] = useState<Record<string, number>>({});
@@ -95,6 +96,14 @@ export function DeckBuildScreen() {
           <button onClick={submit} className="rounded-xl bg-gradient-to-b from-ember-400 to-ember-500 px-6 py-2.5 font-display font-bold uppercase tracking-wider text-ink-950">
             Pronto
           </button>
+          {inTournament && build.mode !== 'sideboard' && (
+            <button
+              onClick={() => confirm('Sair do torneio?') && send({ t: 'quitTournament' })}
+              className="rounded-xl bg-white/10 px-4 py-2.5 text-sm text-white ring-1 ring-white/15 hover:bg-white/20"
+            >
+              Sair
+            </button>
+          )}
         </div>
       </header>
 

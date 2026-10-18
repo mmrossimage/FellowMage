@@ -69,6 +69,12 @@ public final class CardCatalog {
     private volatile Map<String, Entry> byPrinting = Collections.emptyMap(); // "set:num" -> entrada
     private volatile List<Entry> sorted = Collections.emptyList();
     private volatile String status = "não carregado";
+    private volatile List<String[]> boosterSets = Collections.emptyList(); // {código, nome}
+
+    /** Coleções que têm booster no XMage (para draft e selado). */
+    public List<String[]> getBoosterSets() {
+        return boosterSets;
+    }
 
     public String getStatus() {
         return status;
@@ -132,6 +138,19 @@ public final class CardCatalog {
             System.err.println(status);
             return;
         }
+        // coleções com booster, mais recentes primeiro (ExpansionRepository.getWithBoostersSortedByReleaseDate)
+        List<String[]> sets = new ArrayList<>();
+        try (Connection c = DriverManager.getConnection(url, "", "");
+             Statement st = c.createStatement();
+             ResultSet rs = st.executeQuery("SELECT e.CODE, e.NAME FROM EXPANSION e WHERE e.BOOSTERS = TRUE "
+                     + "AND EXISTS (SELECT 1 FROM CARD c WHERE c.SETCODE = e.CODE) ORDER BY e.RELEASEDATE DESC")) {
+            while (rs.next()) {
+                sets.add(new String[]{rs.getString("CODE"), rs.getString("NAME")});
+            }
+        } catch (Exception ex) {
+            System.err.println("Coleções com booster indisponíveis: " + ex.getMessage());
+        }
+        boosterSets = sets;
 
         Map<String, Entry> front = new HashMap<>();
         Map<String, Entry> printing = new HashMap<>();

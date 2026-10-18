@@ -23,9 +23,9 @@ export const SKILL_LABEL: Record<string, string> = {
 
 export const filledSeats = (t: LobbyTable) => t.seats.filter((s) => s.name).length;
 
-/** Dá para entrar: mesa (não torneio) aguardando, com vaga livre para humano. */
+/** Dá para entrar: mesa ou torneio aguardando, com vaga livre para humano. */
 export const canJoin = (t: LobbyTable) =>
-  !t.tournament && t.state === 'WAITING' && t.seats.some((s) => !s.name && (s.type === null || s.type === 'HUMAN'));
+  t.state === 'WAITING' && t.seats.some((s) => !s.name && (s.type === null || s.type === 'HUMAN'));
 
 export function ago(ms: number | null) {
   if (!ms) return '';

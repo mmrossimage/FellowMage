@@ -263,6 +263,73 @@ export type LobbyOptions = {
   deckTypes: string[];
   timeLimits: { id: string; minutes: number }[];
   skillLevels: string[];
+  tournamentTypes: TournamentType[];
+  tournamentGameTypes: string[];
+  draftCubes: string[];
+  boosterSets: { code: string; name: string }[];
+  draftTimings: string[];
+};
+
+export type TournamentType = {
+  name: string;
+  minPlayers: number;
+  maxPlayers: number;
+  boosters: number;
+  draft: boolean;
+  limited: boolean;
+  cube: boolean;
+  elimination: boolean;
+  random: boolean;
+  jumpstart: boolean;
+};
+
+export type CreateTournamentOptions = {
+  name: string;
+  type: string;
+  players: number;
+  ai: number;
+  packs: string[];
+  cube?: string;
+  timing?: string;
+  rounds: number;
+  wins: number;
+  timeLimit: string;
+  constructMinutes: number;
+  password: string;
+  spectators: boolean;
+  /** torneios construídos */
+  deckType?: string;
+  gameType?: string;
+  deck?: string;
+};
+
+export type TournamentGame = { round: number; matchId: string; gameId: string; tableId: string; state: string; result: string; players: string };
+export type TournamentInfo = {
+  name: string;
+  type: string;
+  state: string;
+  info: string;
+  start?: number;
+  end?: number;
+  stepStart?: number;
+  serverTime?: number;
+  constructionTime: number;
+  watchingAllowed: boolean;
+  players: { name: string; state: string; points: number; results: string; history: string }[];
+  rounds: TournamentGame[][];
+};
+
+export type DraftCard = { id: string; set: string; num: string; name?: string; type?: string; types?: string[]; mv?: number; colors?: string[]; rarity?: string };
+export type DraftState = {
+  sets?: string[];
+  players?: string[];
+  boosterNum?: number;
+  cardNum?: number;
+  booster?: DraftCard[];
+  picks?: DraftCard[];
+  picking?: boolean;
+  /** segundos para escolher (0 = sem limite) */
+  timeout?: number;
 };
 /** chat geral da sala, da mesa (sala de espera) ou da partida */
 export type ChatKind = 'room' | 'table' | 'game';
@@ -325,6 +392,14 @@ export type ServerMsg =
   | { t: 'replayStarted'; gameId: string }
   | { t: 'replayEnd'; message: string }
   | { t: 'replayDone' }
+  | { t: 'tournamentStarted'; tournamentId: string }
+  | { t: 'tournamentInfo'; tournament: TournamentInfo }
+  | { t: 'tournamentOver'; message: string }
+  | { t: 'tournamentLeft' }
+  | { t: 'draftStarted'; draftId: string }
+  | { t: 'draft'; method: string; draft: DraftState }
+  | { t: 'draftPicked'; picks: DraftCard[] }
+  | { t: 'draftOver' }
   | { t: 'deckBuild'; build: DeckBuild }
   | { t: 'deckBuildDone' }
   | { t: 'userRequest'; id: string; title: string; message: string; buttons: UserRequestButton[] }
