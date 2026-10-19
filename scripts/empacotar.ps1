@@ -48,7 +48,7 @@ Step 'Java embutido (jlink)'
 Check 'jlink'
 
 Step 'Decks de exemplo, atalhos e LEIA-ME'
-Copy-Item -Recurse (Join-Path $Root 'Xmage\xmage\mage-client\sample-decks') (Join-Path $Out 'sample-decks')
+Copy-Item -Recurse (Join-Path $Root $SampleDecks) (Join-Path $Out 'sample-decks')
 New-Item -ItemType Directory -Force (Join-Path $Out 'decks') | Out-Null
 Copy-Item -Recurse (Join-Path $Root 'packaging\app\*') $Out
 Copy-Item (Join-Path $Root 'mage-src\LICENSE.txt') (Join-Path $Out 'LICENSE-XMage.txt')

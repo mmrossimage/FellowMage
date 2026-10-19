@@ -51,11 +51,12 @@ FellowMage/
 ├── packaging/app/               # Atalhos e instruções do pacote Windows
 ├── .claude/agents/              # Agente de diagnóstico com referência no XMage
 ├── AGENTS.md                    # Orientação do agente para este repositório
+├── Preparar FellowMage.cmd     # Baixa e compila o XMage (uma vez por máquina)
 ├── Iniciar FellowMage.cmd       # Inicia o ambiente de desenvolvimento
 └── Parar FellowMage.cmd         # Encerra os processos iniciados
 ```
 
-`mage-src/` (clone do XMage), `Xmage/` (instalação usada para decks de exemplo) e `decks/` (decks do usuário) são pastas locais ignoradas pelo Git; não fazem parte deste repositório.
+`mage-src/` (clone do XMage, criado pela preparação), `Xmage/` (instalação opcional, fonte alternativa dos decks de exemplo) e `decks/` (decks do usuário) são pastas locais ignoradas pelo Git; não fazem parte deste repositório.
 
 <a id="primeiros-passos"></a>
 
@@ -63,19 +64,14 @@ FellowMage/
 
 ### Ambiente de desenvolvimento no Windows
 
-1. Instale **JDK 21 64 bits**, **Maven 3.9**, **Git** e **Node.js 20+**.
-2. Clone o [XMage oficial](https://github.com/magefree/mage) na pasta `mage-src/`, na raiz deste projeto.
-3. Compile o XMage uma vez:
+> ⚠️ Este repositório **não inclui o XMage**: o gateway e o servidor local dependem dele compilado na sua máquina. Só clonar e abrir `Iniciar FellowMage.cmd` não basta — faça a preparação abaixo uma vez.
 
-   ```powershell
-   Set-Location mage-src
-   mvn install -DskipTests
-   Set-Location ..
-   ```
+1. Instale **JDK 21 64 bits** ([Adoptium](https://adoptium.net); marque a opção que define `JAVA_HOME`), **[Maven 3.9](https://maven.apache.org/download.cgi)** (descompacte e coloque a pasta `bin` no `PATH`), **[Git](https://git-scm.com)** e **[Node.js 20+](https://nodejs.org)**.
+2. Execute `Preparar FellowMage.cmd`. O [script de preparação](scripts/preparar.ps1) confere os programas, baixa o [XMage oficial](https://github.com/magefree/mage) em `mage-src/` na revisão testada com o gateway, compila e instala o XMage no Maven local (`mvn install`, de 10 a 30 minutos na primeira vez) e instala as dependências do cliente web.
+3. Execute `Iniciar FellowMage.cmd`. O script inicia o gateway na porta **8090** e o Vite na **5173**; depois abre <http://localhost:5173>. Na tela inicial, escolha **Jogar online** (servidor público, como `beta.xmage.today:17171`) ou **Jogar contra a IA**. Nesse caso, o gateway liga o servidor XMage local na porta **17171** com [`servidor-local.ps1`](scripts/servidor-local.ps1). Se a preparação ainda não foi feita, ele oferece fazê-la.
+4. Para encerrar, execute `Parar FellowMage.cmd`.
 
-4. Disponibilize uma instalação do XMage em `Xmage/`, incluindo `Xmage/xmage/mage-client/sample-decks`, usada pelos scripts como fonte dos decks de exemplo.
-5. Execute `Iniciar FellowMage.cmd`. O script inicia o gateway na porta **8090** e o Vite na **5173**; depois abre <http://localhost:5173>. Na tela inicial, escolha **Jogar online** (servidor público, como `beta.xmage.today:17171`) ou **Jogar contra a IA**. Nesse caso, o gateway liga o servidor XMage local na porta **17171** com [`servidor-local.ps1`](scripts/servidor-local.ps1).
-6. Para encerrar, execute `Parar FellowMage.cmd`.
+Os decks de exemplo vêm de `mage-src/Mage.Client/release/sample-decks`; se houver uma instalação do XMage em `Xmage/`, os scripts usam os decks dela.
 
 Na primeira vez em que o servidor local é iniciado, ele pode levar mais tempo para criar o banco de cartas. Os scripts configuram o acesso reflexivo exigido pelo protocolo XMage em Java 17+.
 

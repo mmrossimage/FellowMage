@@ -39,9 +39,27 @@ function Start-Part([string]$Name, [string]$Script, [int]$Port, [int]$TimeoutSec
     Write-Host ' ok' -ForegroundColor Green
 }
 
+function Test-Preparado {
+    # Clone novo: falta o XMage compilado (mage-src\ fica fora do Git) e o node_modules do cliente
+    $versao = ([xml](Get-Content (Join-Path $Root 'gateway\pom.xml'))).project.properties.'mage.version'
+    $m2 = Join-Path $env:USERPROFILE ".m2\repository\org\mage\mage-common\$versao\mage-common-$versao.jar"
+    (Test-Path $m2) -and (Test-Path (Join-Path $Root 'mage-src\Mage.Server\target\classes')) -and
+        (Test-Path (Join-Path $Root 'web\node_modules'))
+}
+
 Write-Host ''
 Write-Host '  FellowMage' -ForegroundColor Yellow
 Write-Host ''
+if (-not (Test-Preparado)) {
+    Write-Host '  O FellowMage ainda nao foi preparado neste computador (falta o XMage compilado).' -ForegroundColor Yellow
+    if ((Read-Host '  Preparar agora? Leva de 10 a 30 minutos na primeira vez (S/N)') -notmatch '^[sS]') { exit 1 }
+    & "$PSScriptRoot\preparar.ps1" -SemPausa
+    if ($LASTEXITCODE -ne 0) {
+        Read-Host '  Pressione Enter para fechar'
+        exit 1
+    }
+    Write-Host ''
+}
 try {
     Start-Part 'gateway' 'start-gateway.ps1' 8090 180
     Start-Part 'cliente web' 'start-web.ps1' 5173 180
