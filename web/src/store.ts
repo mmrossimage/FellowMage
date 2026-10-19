@@ -239,8 +239,13 @@ export const useStore = create<State>((set, get) => {
         const patch: Partial<State> = {};
         if (m.game) patch.game = m.game;
         if (m.prompt) {
-          patch.prompt = m.prompt;
-          patch.waiting = m.prompt.kind !== 'inform';
+          if (m.method === 'GAME_INFORM_PERSONAL') {
+            // No XMage, este aviso abre um diálogo separado e não cancela a decisão atual.
+            patch.toast = { text: m.prompt.message, tone: 'info' };
+          } else {
+            patch.prompt = m.prompt;
+            patch.waiting = m.prompt.kind !== 'inform';
+          }
         }
         set(patch);
         break;
