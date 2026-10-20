@@ -93,8 +93,9 @@ public final class CardCatalog {
 
     private void load(Path dbBase) {
         Path mv = dbBase.resolveSibling(dbBase.getFileName() + ".mv.db");
-        // primeira execução: o servidor XMage cria o banco ao subir; esperar por ele
-        while (!Files.exists(mv)) {
+        // primeira execução: o servidor XMage cria o arquivo do banco (RepositoryUtil.bootstrapLocalDb)
+        // e só depois o preenche (CardScanner.scan); esperar até haver cartas
+        while (!Files.exists(mv) || !tryLoad(dbBase)) {
             status = "aguardando o servidor XMage criar o banco de cartas…";
             try {
                 Thread.sleep(5000);
@@ -102,6 +103,10 @@ public final class CardCatalog {
                 return;
             }
         }
+    }
+
+    /** Lê o banco; falso se ele ainda não tem cartas (ou não pôde ser lido). */
+    private boolean tryLoad(Path dbBase) {
         status = "carregando…";
         long t0 = System.currentTimeMillis();
         // mesmos parâmetros do servidor (AUTO_SERVER): os dois processos podem abrir o arquivo; aqui só lemos
@@ -136,7 +141,10 @@ public final class CardCatalog {
         } catch (Exception ex) {
             status = "erro ao ler o banco de cartas: " + ex.getMessage();
             System.err.println(status);
-            return;
+            return false;
+        }
+        if (names.isEmpty()) {
+            return false;
         }
         // coleções com booster, mais recentes primeiro (ExpansionRepository.getWithBoostersSortedByReleaseDate)
         List<String[]> sets = new ArrayList<>();
@@ -171,6 +179,7 @@ public final class CardCatalog {
         sorted = list;
         status = "pronto";
         System.out.println("Catálogo de cartas: " + list.size() + " cartas em " + (System.currentTimeMillis() - t0) + " ms");
+        return true;
     }
 
     private static long printingScore(String setType, java.sql.Timestamp release, String num) {
