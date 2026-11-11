@@ -1,7 +1,8 @@
 # Inicia o FellowMage: gateway e cliente web; depois abre o navegador.
 # O servidor XMage local só sobe quando o jogador escolhe jogar contra a IA (o gateway o inicia).
 # Cada parte roda numa janela minimizada própria (feche com scripts\parar.ps1).
-param([switch]$SemNavegador)
+# -SemVerificar: nao procura atualizacoes ao abrir
+param([switch]$SemNavegador, [switch]$SemVerificar)
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $PSScriptRoot
 $host.UI.RawUI.WindowTitle = 'FellowMage'
@@ -57,6 +58,31 @@ if (-not (Test-Preparado)) {
     if ($LASTEXITCODE -ne 0) {
         Read-Host '  Pressione Enter para fechar'
         exit 1
+    }
+    Write-Host ''
+} elseif (-not $SemVerificar -and -not (Test-Port 8090)) {
+    # Procura atualizacoes (FellowMage no GitHub e versao nova do XMage). Sem rede ou com erro, segue sem avisar.
+    Write-Host '  Procurando atualizacoes...' -NoNewline
+    $novidades = @()
+    try {
+        . "$PSScriptRoot\atualizacao.ps1"
+        $commits = Find-FellowMageUpdate
+        if ($commits -gt 0) { $novidades += "FellowMage: $commits alteracao(oes) nova(s) no GitHub" }
+        $xmage = Find-XmageUpdate -TimeoutSec 5
+        if ($xmage) { $novidades += "XMage: versao nova publicada ($($xmage.Label))" }
+    } catch {
+    }
+    if ($novidades) {
+        Write-Host ' ha novidades:' -ForegroundColor Yellow
+        $novidades | ForEach-Object { Write-Host "   - $_" -ForegroundColor Yellow }
+        if ((Read-Host '  Atualizar agora? (S/N)') -match '^[sS]') {
+            & "$PSScriptRoot\atualizar.ps1" -SemPausa
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host '  A atualizacao nao terminou; abrindo a versao atual.' -ForegroundColor Yellow
+            }
+        }
+    } else {
+        Write-Host ' nenhuma.' -ForegroundColor DarkGray
     }
     Write-Host ''
 }

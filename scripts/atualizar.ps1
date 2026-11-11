@@ -10,19 +10,9 @@ param([switch]$SemPausa, [switch]$SemXMage, [switch]$Forcar)
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot\dev-env.ps1"
 $host.UI.RawUI.WindowTitle = 'FellowMage - atualizacao'
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-
-$XmageConfigUrl = 'https://xmage.today/config.json'
-$GithubApi = 'https://api.github.com/repos/magefree/mage'
-$Headers = @{ 'User-Agent' = 'FellowMage-updater'; 'Accept' = 'application/vnd.github+json' }
-$Utf8 = New-Object Text.UTF8Encoding($false)
-$PrepararPs1 = Join-Path $PSScriptRoot 'preparar.ps1'
-$GatewayPom = Join-Path $Root 'gateway\pom.xml'
+. "$PSScriptRoot\atualizacao.ps1"
 
 function Step($text) { Write-Host ''; Write-Host "==> $text" -ForegroundColor Cyan }
-function Read-Text($path) { [IO.File]::ReadAllText($path, $Utf8) }
-function Write-Text($path, $text) { [IO.File]::WriteAllText($path, $text, $Utf8) }
-function Short($sha) { $sha.Substring(0, 8) }
 
 function Test-Port([int]$Port) {
     foreach ($addr in '127.0.0.1', '::1') {
@@ -35,50 +25,6 @@ function Test-Port([int]$Port) {
         }
     }
     return $false
-}
-
-function Get-PinnedXmage {
-    $text = Read-Text $PrepararPs1
-    if ($text -notmatch "\`$XmageCommit = '([0-9a-f]{40})'") { throw 'Nao achei $XmageCommit em scripts\preparar.ps1' }
-    $commit = $Matches[1]
-    $version = ([xml](Read-Text $GatewayPom)).project.properties.'mage.version'
-    [pscustomobject]@{ Commit = $commit; Version = $version }
-}
-
-function Set-PinnedXmage($commit, $version, $label) {
-    $text = Read-Text $PrepararPs1
-    $text = [regex]::Replace($text, "\`$XmageCommit = '[0-9a-f]{40}'", "`$XmageCommit = '$commit'")
-    $text = [regex]::Replace($text, '(com a qual o gateway foi testado; versao ).*', "`${1}$label.")
-    Write-Text $PrepararPs1 $text
-    $pom = Read-Text $GatewayPom
-    $pom = [regex]::Replace($pom, '<mage.version>[^<]+</mage.version>', "<mage.version>$version</mage.version>")
-    Write-Text $GatewayPom $pom
-}
-
-function Get-CommitDate($sha) {
-    [datetime](Invoke-RestMethod -Headers $Headers -Uri "$GithubApi/commits/$sha").commit.committer.date
-}
-
-# Versao publicada do XMage e a revisao do codigo-fonte com que ela foi gerada
-function Get-LatestXmage {
-    $cfg = Invoke-RestMethod -Uri $XmageConfigUrl -TimeoutSec 30
-    $label = $cfg.XMage.version   # ex.: 1.4.63-dev (2026-10-31 09-42)
-    if ($label -notmatch '^(\d+\.\d+\.\d+)\S*\s*\((\d{4}-\d{2}-\d{2}) (\d{2})-(\d{2})\)') {
-        throw "Formato de versao inesperado em ${XmageConfigUrl}: '$label'"
-    }
-    # o horario do pacote e UTC; o pacote e gerado logo depois do ultimo commit incluido nele
-    $until = "$($Matches[2])T$($Matches[3]):$($Matches[4]):00Z"
-    $commits = @(Invoke-RestMethod -Headers $Headers -Uri "$GithubApi/commits?sha=master&until=$until&per_page=1")
-    if (-not $commits) { throw "Nenhum commit do XMage ate $until" }
-    $sha = $commits[0].sha
-    # numero de versao do proprio codigo-fonte (o pom raiz), que e o que o gateway usa
-    $pom = [xml](Invoke-WebRequest -UseBasicParsing -Headers $Headers -Uri "https://raw.githubusercontent.com/magefree/mage/$sha/pom.xml").Content
-    [pscustomobject]@{
-        Label   = $label
-        Commit  = $sha
-        Date    = [datetime]$commits[0].commit.committer.date
-        Version = $pom.project.version
-    }
 }
 
 function Invoke-Preparar {

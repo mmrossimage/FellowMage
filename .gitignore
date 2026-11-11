@@ -36,3 +36,6 @@ graphify-out/
 /.vs/FellowMage/FileContentIndex
 /.vs/slnx.sqlite
 /.vs/slnx.sqlite-journal
+
+# cache da verificacao de atualizacoes (scripts/atualizacao.ps1)
+/.atualizacao.json

@@ -73,7 +73,9 @@ FellowMage/
 
 ### Atualização
 
-Com o FellowMage fechado, execute `Atualizar FellowMage.cmd`. O [script de atualização](scripts/atualizar.ps1) baixa as novidades do FellowMage (`git pull`), confere em `xmage.today/config.json` a versão do XMage que o launcher oficial instala e, se ela for mais nova, passa a usar a revisão correspondente do código-fonte (`$XmageCommit` em [`preparar.ps1`](scripts/preparar.ps1) e `mage.version` no [`pom.xml` do gateway](gateway/pom.xml)). Depois atualiza `mage-src/`, recompila o XMage e confere se o gateway compila. Se a versão nova não compilar com o gateway, o script volta para a anterior.
+Ao abrir, `Iniciar FellowMage.cmd` procura atualizações (leva cerca de 3 segundos; sem internet, segue sem avisar) e, se houver alguma, pergunta se deve atualizar antes de iniciar. Para não verificar, use `scripts\iniciar.ps1 -SemVerificar`.
+
+Para atualizar a qualquer momento, com o FellowMage fechado, execute `Atualizar FellowMage.cmd`. O [script de atualização](scripts/atualizar.ps1) baixa as novidades do FellowMage (`git pull`), confere em `xmage.today/config.json` a versão do XMage que o launcher oficial instala e, se ela for mais nova, passa a usar a revisão correspondente do código-fonte (`$XmageCommit` em [`preparar.ps1`](scripts/preparar.ps1) e `mage.version` no [`pom.xml` do gateway](gateway/pom.xml)). Depois atualiza `mage-src/`, recompila o XMage e confere se o gateway compila. Se a versão nova não compilar com o gateway, o script volta para a anterior.
 
 Quando o XMage muda de versão, teste uma partida e faça o commit de `scripts/preparar.ps1` e `gateway/pom.xml`, para os outros clones usarem a mesma revisão. Recursos novos do XMage, como dados novos nas visões, ainda precisam ser adaptados no gateway e no cliente.
 
