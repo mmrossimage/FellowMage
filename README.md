@@ -71,6 +71,12 @@ FellowMage/
 3. Execute `Iniciar FellowMage.cmd`. O script inicia o gateway na porta **8090** e o Vite na **5173**; depois abre <http://localhost:5173>. Na tela inicial, escolha **Jogar online** (servidor público, como `beta.xmage.today:17171`) ou **Jogar contra a IA**. Nesse caso, o gateway liga o servidor XMage local na porta **17171** com [`servidor-local.ps1`](scripts/servidor-local.ps1). Se a preparação ainda não foi feita, ele oferece fazê-la.
 4. Para encerrar, execute `Parar FellowMage.cmd`.
 
+### Atualização
+
+Com o FellowMage fechado, execute `Atualizar FellowMage.cmd`. O [script de atualização](scripts/atualizar.ps1) baixa as novidades do FellowMage (`git pull`), confere em `xmage.today/config.json` a versão do XMage que o launcher oficial instala e, se ela for mais nova, passa a usar a revisão correspondente do código-fonte (`$XmageCommit` em [`preparar.ps1`](scripts/preparar.ps1) e `mage.version` no [`pom.xml` do gateway](gateway/pom.xml)). Depois atualiza `mage-src/`, recompila o XMage e confere se o gateway compila. Se a versão nova não compilar com o gateway, o script volta para a anterior.
+
+Quando o XMage muda de versão, teste uma partida e faça o commit de `scripts/preparar.ps1` e `gateway/pom.xml`, para os outros clones usarem a mesma revisão. Recursos novos do XMage, como dados novos nas visões, ainda precisam ser adaptados no gateway e no cliente.
+
 Os decks de exemplo vêm de `mage-src/Mage.Client/release/sample-decks`; se houver uma instalação do XMage em `Xmage/`, os scripts usam os decks dela.
 
 Na primeira vez em que o servidor local é iniciado, ele pode levar mais tempo para criar o banco de cartas. Os scripts configuram o acesso reflexivo exigido pelo protocolo XMage em Java 17+.
