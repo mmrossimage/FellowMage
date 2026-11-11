@@ -332,7 +332,10 @@ export type DraftState = {
   picking?: boolean;
   /** segundos para escolher (0 = sem limite) */
   timeout?: number;
+  /** sugestões do servidor (XMage 1.4.63+), melhor primeiro; rank 1, 2, 3... por fonte */
+  suggests?: DraftSuggest[];
 };
+export type DraftSuggest = { cardId: string; rank: number; source: string; info: string };
 /** chat geral da sala, da mesa (sala de espera) ou da partida */
 export type ChatKind = 'room' | 'table' | 'game';
 export type CreateTableOptions = {

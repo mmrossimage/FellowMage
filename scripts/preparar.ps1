@@ -6,9 +6,9 @@ $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot\dev-env.ps1"
 $host.UI.RawUI.WindowTitle = 'FellowMage - preparacao'
 
-# Revisao do XMage (magefree/mage) com a qual o gateway foi testado; versao 1.4.62.
+# Revisao do XMage (magefree/mage) com a qual o gateway foi testado; versao 1.4.63 (release de 2026-10-31).
 $XmageRepo = 'https://github.com/magefree/mage.git'
-$XmageCommit = '492369c7844b8d76479f0393ff9eb6b0b0cf30d7'
+$XmageCommit = '79aec614fc29d0c3eebd10fff0d5c1b40852bd52'
 
 function Step($text) { Write-Host ''; Write-Host "==> $text" -ForegroundColor Cyan }
 function Check($what) { if ($LASTEXITCODE -ne 0) { throw "$what falhou (codigo $LASTEXITCODE)" } }
@@ -69,8 +69,15 @@ try {
         }
         $atual = (git -C $mageSrc rev-parse HEAD).Trim()
         if ($atual -ne $XmageCommit) {
-            Write-Host "  mage-src\ ja existe em outra revisao ($atual); mantendo como esta." -ForegroundColor Yellow
-            Write-Host "  A revisao testada e $XmageCommit." -ForegroundColor Yellow
+            $alterado = @(git -C $mageSrc status --porcelain --untracked-files=no)
+            if ($alterado) {
+                Write-Host "  mage-src\ ja existe em outra revisao ($atual) e tem alteracoes locais; mantendo como esta." -ForegroundColor Yellow
+                Write-Host "  A revisao testada e $XmageCommit." -ForegroundColor Yellow
+            } else {
+                Write-Host "  atualizando de $atual para a revisao testada..."
+                git -C $mageSrc fetch --depth 1 origin $XmageCommit; Check 'git fetch do XMage'
+                git -C $mageSrc -c advice.detachedHead=false checkout -q $XmageCommit; Check 'git checkout do XMage'
+            }
         } else {
             Write-Host '  ja baixado.' -ForegroundColor Green
         }

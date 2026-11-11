@@ -5,5 +5,5 @@ $Java = Join-Path $Root 'runtime\bin\java.exe'
 $Logs = Join-Path $Root 'logs'
 New-Item -ItemType Directory -Force $Logs | Out-Null
 Start-Process -FilePath $Java -WorkingDirectory (Join-Path $Root 'server') -WindowStyle Hidden `
-    -ArgumentList @('--add-opens=java.base/java.io=ALL-UNNAMED', '-Xmx1536m', '-jar', 'lib\mage-server-1.4.62.jar') `
+    -ArgumentList @('--add-opens=java.base/java.io=ALL-UNNAMED', '-Xmx1536m', '-jar', 'lib\mage-server-1.4.63.jar') `
     -RedirectStandardOutput (Join-Path $Logs 'servidor.log') -RedirectStandardError (Join-Path $Logs 'servidor-erros.log')

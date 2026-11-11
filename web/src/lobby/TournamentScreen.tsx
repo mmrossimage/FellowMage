@@ -2,7 +2,7 @@ import { motion } from 'framer-motion';
 import { useEffect, useMemo, useState } from 'react';
 import { CardArt } from '../components/CardArt';
 import { useStore } from '../store';
-import type { DraftCard } from '../types';
+import type { DraftCard, DraftSuggest } from '../types';
 import { cx, sanitizeHtml } from '../util';
 import { ChatBox } from './ChatBox';
 
@@ -120,6 +120,12 @@ export function DraftScreen() {
     setSelected(undefined);
   };
   const sortedPicks = useMemo(() => [...picks].sort((a, b) => (a.mv ?? 0) - (b.mv ?? 0) || (a.name ?? '').localeCompare(b.name ?? '')), [picks]);
+  // sugestões do servidor por carta (o DraftPanel oficial marca cada uma com um ícone numerado)
+  const suggestsByCard = useMemo(() => {
+    const map = new Map<string, DraftSuggest[]>();
+    for (const s of draft.suggests ?? []) map.set(s.cardId, [...(map.get(s.cardId) ?? []), s]);
+    return map;
+  }, [draft.suggests]);
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex h-full min-h-0 flex-col gap-3 p-4">
@@ -156,6 +162,7 @@ export function DraftScreen() {
                 key={c.id}
                 card={c}
                 selected={selected === c.id}
+                suggests={suggestsByCard.get(c.id)}
                 onClick={() => setSelected(c.id)}
                 onDoubleClick={() => pick(c.id)}
                 onHover={setHovered}
@@ -182,11 +189,13 @@ export function DraftScreen() {
 function DraftCardButton({
   card,
   selected,
+  suggests,
   onClick,
   onDoubleClick,
 }: {
   card: DraftCard;
   selected: boolean;
+  suggests?: DraftSuggest[];
   onClick: () => void;
   onDoubleClick: () => void;
   onHover: (id?: string) => void;
@@ -195,10 +204,25 @@ function DraftCardButton({
     <button
       onClick={onClick}
       onDoubleClick={onDoubleClick}
-      title={`${card.name ?? ''} — ${card.type ?? ''}`}
+      title={[`${card.name ?? ''} — ${card.type ?? ''}`, ...(suggests ?? []).map((s) => `Sugestão nº ${s.rank} (${s.source}): ${s.info}`)].join('\n')}
       className={cx('relative rounded-[6%/4.5%] transition hover:-translate-y-1', selected && 'ring-4 ring-ember-400 shadow-playable')}
     >
       <CardArt card={{ name: card.name ?? '', set: card.set, num: card.num, colors: card.colors }} />
+      {suggests?.length ? (
+        <span className="pointer-events-none absolute right-1 top-1 flex gap-0.5">
+          {suggests.map((s, i) => (
+            <span
+              key={i}
+              className={cx(
+                'grid h-6 w-6 place-items-center font-display text-xs font-bold text-ink-950 shadow [clip-path:polygon(25%_5%,75%_5%,100%_50%,75%_95%,25%_95%,0_50%)]',
+                s.rank === 1 ? 'bg-ember-300' : 'bg-white/80',
+              )}
+            >
+              {s.rank}
+            </span>
+          ))}
+        </span>
+      ) : null}
     </button>
   );
 }

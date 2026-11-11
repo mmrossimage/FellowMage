@@ -7,6 +7,7 @@ import mage.constants.MultiplayerAttackOption;
 import mage.constants.RangeOfInfluence;
 import mage.constants.SkillLevel;
 import mage.game.draft.DraftOptions;
+import mage.game.draft.DraftPickSuggest;
 import mage.game.tournament.LimitedOptions;
 import mage.game.tournament.TournamentOptions;
 import mage.players.PlayerType;
@@ -170,6 +171,19 @@ final class Tournaments {
             m.put("picks", cards(pick.getPicks(), catalog));
             m.put("picking", pick.isPicking());
             m.put("timeout", pick.getTimeout());
+            // 1.4.63: sugestões de escolha do servidor, melhor primeiro (DraftPanel.addPickSuggestIcons)
+            List<Map<String, Object>> suggests = new ArrayList<>();
+            if (pick.getPickSuggests() != null) {
+                for (DraftPickSuggest s : pick.getPickSuggests()) {
+                    Map<String, Object> sm = new LinkedHashMap<>();
+                    sm.put("cardId", s.getCardId());
+                    sm.put("rank", s.getRank());
+                    sm.put("source", s.getSource());
+                    sm.put("info", s.getInfo());
+                    suggests.add(sm);
+                }
+            }
+            m.put("suggests", suggests);
         }
         return m;
     }

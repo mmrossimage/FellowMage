@@ -119,6 +119,8 @@ public final class ClientBridge implements MageClient {
     private String parkKey;
     private String serverLabel;
     private volatile String lastServerError;
+    /** último aviso do SessionImpl (showMessage); explica falhas de conexão */
+    private volatile String lastServerMessage;
     private java.util.concurrent.ScheduledFuture<?> parkExpiry;
     // estado reenviado quando o navegador reconecta
     private volatile String lastGameJson;
@@ -499,8 +501,18 @@ public final class ClientBridge implements MageClient {
         connection.setUserData(userData);
 
         session = new SessionImpl(this);
+        lastServerMessage = null;
         if (!session.connectStart(connection)) {
-            sendError("Não foi possível conectar em " + connection.getHost() + ":" + port + " — " + session.getLastError());
+            // o SessionImpl só avisa o motivo (ex.: versões diferentes) por showMessage; o cliente oficial
+            // o mostra num diálogo, aqui ele vai junto do erro para aparecer na tela de conexão
+            String reason = session.getLastError();
+            if ((reason == null || reason.isEmpty()) && lastServerMessage != null) {
+                reason = lastServerMessage
+                        .replaceFirst("^Remote task error: ", "")
+                        .replaceFirst("^[\\w.]+Exception: ", "")
+                        .replaceAll("(?i)<br\\s*/?>", " ");
+            }
+            sendError("Não foi possível conectar em " + connection.getHost() + ":" + port + " — " + reason);
             session = null;
             return;
         }
@@ -1444,6 +1456,7 @@ public final class ClientBridge implements MageClient {
 
     @Override
     public void showMessage(String message) {
+        lastServerMessage = message;
         send(msg("serverMessage").with("message", message));
     }
 
