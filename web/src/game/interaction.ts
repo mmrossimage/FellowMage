@@ -5,7 +5,7 @@ export type Highlight = 'playable' | 'target' | 'selected' | 'attacking' | 'bloc
 
 const CLICKABLE_KINDS = new Set(['select', 'target', 'playMana', 'playXMana']);
 
-function optionIds(prompt: Prompt | undefined, key: string): string[] {
+export function optionIds(prompt: Prompt | undefined, key: string): string[] {
   const v = prompt?.options?.[key];
   return Array.isArray(v) ? (v as string[]) : [];
 }

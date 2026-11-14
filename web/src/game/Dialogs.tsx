@@ -5,7 +5,7 @@ import type { Card, Prompt } from '../types';
 import { promptHtml } from '../i18n';
 import { cx, sanitizeHtml } from '../util';
 import { CardFace } from './CardFace';
-import { HIGHLIGHT_CLASS } from './interaction';
+import { HIGHLIGHT_CLASS, optionIds } from './interaction';
 
 /** Diálogos modais para pedidos que não são "clique no tabuleiro". */
 export function PromptDialogs() {
@@ -228,22 +228,34 @@ function CardPickDialog({ prompt, onPeek }: { prompt: Prompt; onPeek: () => void
   const respondBoolean = useStore((s) => s.respondBoolean);
   const setHovered = useStore((s) => s.setHovered);
   const opts = prompt.options ?? {};
+  // já escolhidas: o XMage manda em "chosenTargets" (HumanPlayer.chooseTarget), como no tabuleiro
+  const chosen = new Set(optionIds(prompt, 'chosenTargets'));
   return (
     <>
       <Title html={prompt.message} sub={opts['secondMessage'] as string | undefined} />
       <div className="grid grid-cols-[repeat(auto-fill,minmax(130px,1fr))] gap-3">
         {prompt.cards1!.map((c) => {
           const can = !prompt.targets || prompt.targets.includes(c.id);
+          const isChosen = !!c.selected || chosen.has(c.id);
           return (
             <button
               key={c.id}
-              disabled={!can}
+              disabled={!can && !isChosen}
               onClick={() => respondUUID(c.id)}
               onMouseEnter={() => setHovered(c.id)}
               onMouseLeave={() => setHovered(undefined)}
-              className={cx('rounded-[6%/4.5%] transition hover:-translate-y-1 disabled:opacity-40')}
+              className={cx('relative rounded-[6%/4.5%] transition hover:-translate-y-1 disabled:opacity-40')}
             >
-              <CardFace card={c} className={cx(can && HIGHLIGHT_CLASS.target.replace(' animate-pulse', ''), c.selected && HIGHLIGHT_CLASS.selected)} />
+              {/* um box-shadow só: as classes de destaque se sobrescrevem, então escolhida tem precedência */}
+              <CardFace
+                card={c}
+                className={cx(isChosen ? HIGHLIGHT_CLASS.selected : can && HIGHLIGHT_CLASS.target.replace(' animate-pulse', ''))}
+              />
+              {isChosen && (
+                <span className="pointer-events-none absolute -right-2 -top-2 flex h-7 w-7 items-center justify-center rounded-full bg-blood-500 text-sm font-bold text-white shadow-lg ring-2 ring-ink-900">
+                  ✓
+                </span>
+              )}
             </button>
           );
         })}
