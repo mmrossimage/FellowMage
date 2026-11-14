@@ -83,9 +83,20 @@ try {
         }
     }
 
-    Step 'Compilando o XMage (mvn install; a primeira vez leva de 10 a 30 minutos)'
+    # Ao trocar de revisao, a compilacao incremental do Maven so recompila os .java alterados e reaproveita
+    # classes antigas que chamam metodos cuja assinatura mudou (NoSuchMethodError no meio da partida, como
+    # CreateTokenEffect x Token.putOntoBattlefield na 1.4.63). Por isso compila do zero (clean) sempre que a
+    # revisao for diferente da ultima compilada com sucesso.
+    $marcador = Join-Path $mageSrc '.fellowmage-compilado'
+    $revisao = (git -C $mageSrc rev-parse HEAD).Trim()
+    $compilada = if (Test-Path $marcador) { (Get-Content $marcador -Raw).Trim() } else { '' }
+    $metas = if ($compilada -eq $revisao) { @('install') } else { @('clean', 'install') }
+    Step "Compilando o XMage (mvn $($metas -join ' '); de 10 a 30 minutos quando compila do zero)"
     Push-Location $mageSrc
-    try { mvn -B install -DskipTests "-Dmaven.javadoc.skip=true"; Check 'Compilacao do XMage' } finally { Pop-Location }
+    try {
+        mvn -B @metas -DskipTests "-Dmaven.javadoc.skip=true"; Check 'Compilacao do XMage'
+        Set-Content -Path $marcador -Value $revisao -Encoding ascii
+    } finally { Pop-Location }
 
     Step 'Dependencias do cliente web (npm install)'
     Push-Location (Join-Path $Root 'web')
