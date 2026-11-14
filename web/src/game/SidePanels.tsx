@@ -5,7 +5,7 @@ import { cx, rulesToHtml, sanitizeHtml } from '../util';
 import { CardFace } from './CardFace';
 import { HIGHLIGHT_CLASS, highlightFor, useObjectClick } from './interaction';
 
-/** A pilha: o objeto do topo fica em cima, maior. */
+/** A pilha: o objeto do topo (o próximo a resolver) fica em cima, destacado. */
 export function StackPanel() {
   const stack = useStore((s) => s.game?.stack ?? []);
   const game = useStore((s) => s.game);
@@ -13,7 +13,8 @@ export function StackPanel() {
   const waiting = useStore((s) => s.waiting);
   const setHovered = useStore((s) => s.setHovered);
   const onClick = useObjectClick();
-  const items = [...stack].reverse(); // XMage envia do fundo para o topo
+  // XMage envia do topo para o fundo: SpellStack é um ArrayDeque (push = addFirst) e o GameView o percorre nessa ordem
+  const items = stack;
 
   return (
     <AnimatePresence>

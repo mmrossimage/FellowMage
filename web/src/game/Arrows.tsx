@@ -26,7 +26,7 @@ export function Arrows() {
       for (const b of g.blockers) for (const a of g.attackers) arrows.push({ from: b, to: a, kind: 'block' });
     }
     // alvos: objeto do topo da pilha sempre; outro objeto da pilha quando estiver sob o mouse
-    const top = game.stack[game.stack.length - 1];
+    const top = game.stack[0]; // XMage envia a pilha do topo para o fundo
     const shown = new Set([top?.id, hovered].filter(Boolean) as string[]);
     for (const s of game.stack) {
       if (!shown.has(s.id)) continue;
