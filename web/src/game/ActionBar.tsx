@@ -116,19 +116,29 @@ export function ActionBar() {
       )}
 
       {waiting && prompt?.kind === 'select' && (
-        <div className="flex gap-1.5 text-[11px]">
-          <QuickPass label={myTurn ? 'Até o fim do turno' : 'Até meu turno'} onClick={() => action(myTurn ? 'PASS_PRIORITY_UNTIL_TURN_END_STEP' : 'PASS_PRIORITY_UNTIL_MY_NEXT_TURN')} />
-          <QuickPass label="Próxima fase principal" onClick={() => action('PASS_PRIORITY_UNTIL_NEXT_MAIN_PHASE')} />
-          <QuickPass label="Resolver pilha" onClick={() => action('PASS_PRIORITY_UNTIL_STACK_RESOLVED')} />
+        <div className="grid grid-cols-2 gap-1.5 text-[11px]">
+          <QuickPass
+            label={myTurn ? 'Até o fim do turno' : 'Até meu turno'}
+            title={myTurn ? 'Passa até a etapa final deste turno (F5)' : 'Passa tudo até o início do meu próximo turno (F9)'}
+            onClick={() => action(myTurn ? 'PASS_PRIORITY_UNTIL_TURN_END_STEP' : 'PASS_PRIORITY_UNTIL_MY_NEXT_TURN')}
+          />
+          {/* F11 do cliente oficial: para na etapa final do jogador anterior a mim (hora de instantâneas/flash) */}
+          <QuickPass
+            label="Etapa final antes do meu turno"
+            title="Passa tudo até a etapa final do turno do oponente que joga antes de mim (F11)"
+            onClick={() => action('PASS_PRIORITY_UNTIL_END_STEP_BEFORE_MY_NEXT_TURN')}
+          />
+          <QuickPass label="Próxima fase principal" title="Passa até a próxima fase principal (F7)" onClick={() => action('PASS_PRIORITY_UNTIL_NEXT_MAIN_PHASE')} />
+          <QuickPass label="Resolver pilha" title="Passa até a pilha resolver (F10)" onClick={() => action('PASS_PRIORITY_UNTIL_STACK_RESOLVED')} />
         </div>
       )}
     </div>
   );
 }
 
-function QuickPass({ label, onClick }: { label: string; onClick: () => void }) {
+function QuickPass({ label, title, onClick }: { label: string; title?: string; onClick: () => void }) {
   return (
-    <button onClick={onClick} className="flex-1 rounded-lg bg-black/40 px-2 py-1.5 text-white/70 ring-1 ring-white/10 transition hover:bg-white/10 hover:text-white">
+    <button onClick={onClick} title={title} className="rounded-lg bg-black/40 px-2 py-1.5 text-white/70 ring-1 ring-white/10 transition hover:bg-white/10 hover:text-white">
       {label}
     </button>
   );
