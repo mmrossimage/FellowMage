@@ -15,6 +15,7 @@ export function DeckEditor() {
   const request = useStore((s) => s.request);
   const navigate = useStore((s) => s.navigate);
   const refreshUserDecks = useStore((s) => s.refreshUserDecks);
+  const send = useStore((s) => s.send);
 
   const [deck, setDeck] = useState<EditorDeck>(EMPTY);
   const [dirty, setDirty] = useState(false);
@@ -141,6 +142,27 @@ export function DeckEditor() {
           className="min-w-0 flex-1 bg-transparent font-display text-2xl font-bold text-white outline-none disabled:opacity-80"
         />
         {readOnly && <span className="rounded bg-white/10 px-2 py-1 text-xs text-white/60">exemplo do XMage (somente leitura)</span>}
+        {deck.moxfieldUrl && deck.path && (
+          <span
+            className="flex items-center gap-2 rounded bg-white/10 px-2 py-1 text-xs text-white/60"
+            title="Alterações feitas aqui são substituídas quando o deck mudar no Moxfield"
+          >
+            <a href={deck.moxfieldUrl} target="_blank" rel="noreferrer" className="hover:text-white">
+              sincronizado com o Moxfield ↗
+            </a>
+            <button
+              onClick={() => {
+                if (!confirm('Parar de sincronizar este deck com o Moxfield? O deck continua em "Meus decks".')) return;
+                send({ t: 'unlinkMoxfield', path: deck.path });
+                setDeck((d) => ({ ...d, moxfieldUrl: undefined }));
+              }}
+              className="text-white/40 hover:text-blood-400"
+              title="Desvincular do Moxfield"
+            >
+              ✕
+            </button>
+          </span>
+        )}
         {dirty && !readOnly && <span className="text-xs text-ember-300">● não salvo</span>}
         <HeaderBtn onClick={() => setDialog('import')} disabled={readOnly}>Importar</HeaderBtn>
         <HeaderBtn onClick={() => setDialog('export')}>Exportar</HeaderBtn>

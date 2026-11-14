@@ -7,6 +7,7 @@ import mage.cards.decks.DeckCardInfo;
 import mage.cards.decks.DeckCardLists;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -14,6 +15,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -27,10 +30,19 @@ public final class DeckService {
 
     private final DeckLibrary library;
     private final CardCatalog catalog;
+    private final MoxfieldSync moxfield;
+    // um deck do Moxfield é sincronizado por vez, mesmo com vários navegadores abertos
+    private final Object syncLock = new Object();
+    private final ExecutorService syncWorker = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "moxfield-sync");
+        t.setDaemon(true);
+        return t;
+    });
 
     public DeckService(DeckLibrary library, CardCatalog catalog) {
         this.library = library;
         this.catalog = catalog;
+        this.moxfield = new MoxfieldSync(library.getUserRoot());
     }
 
     // ------------------------------------------------------------------ resumo (tela inicial / lista de decks)
@@ -45,6 +57,7 @@ public final class DeckService {
                 broken.put("path", path);
                 broken.put("name", path.substring(DeckLibrary.USER_PREFIX.length()));
                 broken.put("error", e.getMessage());
+                putMoxfield(broken, path);
                 res.add(broken);
             }
         }
@@ -73,7 +86,22 @@ public final class DeckService {
         }
         m.put("commanders", commanders);
         m.put("identity", COLOR_ORDER.stream().filter(identity::contains).toArray());
+        putMoxfield(m, path);
         return m;
+    }
+
+    private void putMoxfield(Map<String, Object> m, String path) {
+        MoxfieldSync.Link link = moxfield.get(path);
+        if (link == null) {
+            return;
+        }
+        Map<String, Object> mx = new LinkedHashMap<>();
+        mx.put("url", link.url());
+        mx.put("updated", link.remoteUpdated);
+        mx.put("lastCheck", link.lastCheck);
+        mx.put("error", link.error);
+        mx.put("missing", link.missing);
+        m.put("moxfield", mx);
     }
 
     // ------------------------------------------------------------------ deck <-> JSON do editor
@@ -83,6 +111,10 @@ public final class DeckService {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("path", path);
         m.put("readOnly", !path.startsWith(DeckLibrary.USER_PREFIX));
+        MoxfieldSync.Link link = moxfield.get(path);
+        if (link != null) {
+            m.put("moxfieldUrl", link.url());
+        }
         m.put("name", deck.getName());
         m.put("commanders", entries(deck.getSideboard()));
         m.put("cards", entries(deck.getCards()));
@@ -164,6 +196,193 @@ public final class DeckService {
             }
         }
         return new DeckCardInfo(name, num == null ? "0" : num, set == null ? "???" : set, qty);
+    }
+
+    public void delete(String path) throws IOException {
+        library.deleteUserDeck(path);
+        moxfield.remove(path);
+    }
+
+    // ------------------------------------------------------------------ decks vinculados ao Moxfield
+
+    /** Vincula um link do Moxfield: baixa o deck, grava em "Meus decks" e devolve o caminho. */
+    public String linkMoxfield(String url) throws IOException {
+        String id = MoxfieldSync.parseId(url);
+        synchronized (syncLock) {
+            String existing = moxfield.pathFor(id);
+            if (existing != null) {
+                syncMoxfield(existing, true);
+                return existing;
+            }
+            MoxfieldSync.RemoteDeck remote = moxfield.fetch(id);
+            String path = DeckLibrary.USER_PREFIX + uniqueFileName(remote.name);
+            MoxfieldSync.Link link = new MoxfieldSync.Link();
+            link.publicId = id;
+            writeRemote(path, remote, link);
+            return path;
+        }
+    }
+
+    /**
+     * Consulta de novo um deck vinculado e regrava o arquivo se ele mudou no Moxfield.
+     * Sem {@code force}, respeita o intervalo mínimo entre consultas e não lança erro de rede
+     * (o erro fica no vínculo). Devolve true se o deck ou o estado do vínculo mudou.
+     */
+    public boolean syncMoxfield(String path, boolean force) throws IOException {
+        synchronized (syncLock) {
+            MoxfieldSync.Link link = moxfield.get(path);
+            if (link == null) {
+                throw new IOException("Este deck não está vinculado ao Moxfield");
+            }
+            long now = System.currentTimeMillis();
+            if (!force && now - link.lastCheck < MoxfieldSync.MIN_CHECK_INTERVAL.toMillis()) {
+                return false;
+            }
+            link.lastCheck = now;
+            try {
+                MoxfieldSync.RemoteDeck remote = moxfield.fetch(link.publicId);
+                if (!force && remote.updated != null && remote.updated.equals(link.remoteUpdated)
+                        && link.lastText != null && Files.isRegularFile(library.resolve(path))) {
+                    boolean hadError = link.error != null;
+                    link.error = null;
+                    moxfield.put(path, link);
+                    return hadError;
+                }
+                writeRemote(path, remote, link);
+                return true;
+            } catch (IOException e) {
+                boolean changed = !e.getMessage().equals(link.error);
+                link.error = e.getMessage();
+                moxfield.put(path, link);
+                if (force) {
+                    throw e;
+                }
+                return changed;
+            }
+        }
+    }
+
+    /** Em segundo plano: confere os decks vinculados que não são consultados há algum tempo. */
+    public void syncStaleAsync(Runnable onChange) {
+        Map<String, MoxfieldSync.Link> links = moxfield.all();
+        long now = System.currentTimeMillis();
+        boolean anyStale = links.values().stream()
+                .anyMatch(l -> now - l.lastCheck >= MoxfieldSync.MIN_CHECK_INTERVAL.toMillis());
+        if (!anyStale) {
+            return;
+        }
+        syncWorker.submit(() -> {
+            boolean changed = false;
+            for (String path : links.keySet()) {
+                try {
+                    changed |= syncMoxfield(path, false);
+                } catch (Exception e) {
+                    System.err.println("Moxfield: " + path + ": " + e.getMessage());
+                }
+            }
+            if (changed) {
+                try {
+                    onChange.run();
+                } catch (Exception e) {
+                    // o navegador que pediu a lista já se desconectou
+                }
+            }
+        });
+    }
+
+    public void unlinkMoxfield(String path) {
+        moxfield.remove(path);
+    }
+
+    /**
+     * Escolhe (ou remove, com {@code substitute == null}) o substituto de uma carta do Moxfield que o
+     * XMage não tem. O substituto fica guardado no vínculo e é reaplicado em toda sincronização.
+     */
+    public void setMoxfieldSubstitute(String path, String missingName, JsonObject substitute) throws IOException {
+        synchronized (syncLock) {
+            MoxfieldSync.Link link = moxfield.get(path);
+            if (link == null) {
+                throw new IOException("Este deck não está vinculado ao Moxfield");
+            }
+            String key = missingName.toLowerCase(Locale.ROOT);
+            if (substitute == null) {
+                link.substitutes.remove(key);
+            } else {
+                String name = substitute.get("name").getAsString();
+                String set = substitute.has("set") && !substitute.get("set").isJsonNull() ? substitute.get("set").getAsString() : null;
+                String num = substitute.has("num") && !substitute.get("num").isJsonNull() ? substitute.get("num").getAsString() : null;
+                CardCatalog.Entry e = set != null && num != null ? catalog.findPrinting(set, num) : null;
+                if (e == null || !e.name.equalsIgnoreCase(name)) {
+                    e = catalog.find(name);
+                }
+                if (e == null) {
+                    throw new IOException("O XMage não conhece a carta '" + name + "'");
+                }
+                boolean samePrinting = set != null && num != null && e.name.equalsIgnoreCase(name);
+                link.substitutes.put(key, new MoxfieldSync.Card(e.name, samePrinting ? set : e.set, samePrinting ? num : e.num));
+            }
+            if (link.lastText == null) {
+                // vínculo gravado antes de guardar a lista: busca de novo no Moxfield
+                writeRemote(path, moxfield.fetch(link.publicId), link);
+            } else {
+                rebuild(path, link);
+            }
+        }
+    }
+
+    private void writeRemote(String path, MoxfieldSync.RemoteDeck remote, MoxfieldSync.Link link) throws IOException {
+        link.lastName = remote.name;
+        link.lastText = remote.text;
+        link.remoteUpdated = remote.updated;
+        link.lastCheck = System.currentTimeMillis();
+        link.error = null;
+        rebuild(path, link);
+    }
+
+    /** Monta o deck a partir da última lista do Moxfield, com os substitutos escolhidos, e grava deck e vínculo. */
+    @SuppressWarnings("unchecked")
+    private void rebuild(String path, MoxfieldSync.Link link) throws IOException {
+        Map<String, Object> parsed = importText(link.lastText);
+        DeckCardLists deck = new DeckCardLists();
+        deck.setName(link.lastName);
+        addAll(deck.getCards(), parsed.get("cards"));
+        // no XMage o(s) comandante(s) e o sideboard ficam no mesmo lugar
+        addAll(deck.getSideboard(), parsed.get("commanders"));
+        addAll(deck.getSideboard(), parsed.get("sideboard"));
+
+        List<MoxfieldSync.Missing> missing = new ArrayList<>();
+        for (String line : (List<String>) parsed.get("unresolved")) {
+            Matcher m = TEXT_LINE.matcher(line);
+            String name = m.matches() ? m.group(2).trim() : line;
+            int qty = m.matches() && m.group(1) != null ? Integer.parseInt(m.group(1)) : 1;
+            MoxfieldSync.Card sub = link.substitutes.get(name.toLowerCase(Locale.ROOT));
+            if (sub != null) {
+                deck.getCards().add(new DeckCardInfo(sub.name, sub.num, sub.set, qty));
+            }
+            missing.add(new MoxfieldSync.Missing(name, qty, sub));
+        }
+        if (deck.getCards().isEmpty()) {
+            throw new IOException("Nenhuma carta do deck foi reconhecida pelo XMage");
+        }
+        library.saveUserDeck(path, deck);
+        link.missing = missing;
+        moxfield.put(path, link);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void addAll(List<DeckCardInfo> target, Object cards) {
+        for (Map<String, Object> c : (List<Map<String, Object>>) cards) {
+            target.add(new DeckCardInfo((String) c.get("name"), (String) c.get("num"), (String) c.get("set"), (Integer) c.get("qty")));
+        }
+    }
+
+    private String uniqueFileName(String name) throws IOException {
+        String base = DeckLibrary.safeFileName(name);
+        String candidate = base + ".dck";
+        for (int i = 2; Files.exists(library.resolve(DeckLibrary.USER_PREFIX + candidate)); i++) {
+            candidate = base + " (" + i + ").dck";
+        }
+        return candidate;
     }
 
     public Map<String, Object> printings(String name) {

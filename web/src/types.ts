@@ -75,11 +75,31 @@ export type DeckSummary = {
   commanders?: { name: string; set: string; num: string }[];
   identity?: string[];
   error?: string;
+  /** deck mantido em sincronia com um link do Moxfield */
+  moxfield?: MoxfieldLink;
+};
+
+export type MoxfieldLink = {
+  url: string;
+  /** lastUpdatedAtUtc do Moxfield na última sincronização */
+  updated?: string | null;
+  /** epoch ms da última consulta */
+  lastCheck: number;
+  error?: string | null;
+  /** cartas do Moxfield que o XMage não tem, com o substituto escolhido (se houver) */
+  missing: MoxfieldMissing[];
+};
+
+export type MoxfieldMissing = {
+  name: string;
+  qty: number;
+  substitute?: { name: string; set: string; num: string } | null;
 };
 
 export type EditorDeck = {
   path?: string | null;
   readOnly?: boolean;
+  moxfieldUrl?: string;
   name: string;
   commanders: CatalogCard[];
   cards: CatalogCard[];
@@ -413,5 +433,6 @@ export type ServerMsg =
   | { t: 'userDecks'; decks: DeckSummary[] }
   | { t: 'deck'; deck: EditorDeck }
   | { t: 'deckSaved'; path: string }
+  | { t: 'moxfieldLinked'; path: string }
   | { t: 'decklist'; result: DecklistImport }
   | { t: 'printings'; result: { name: string; printings: { set: string; num: string }[] } };

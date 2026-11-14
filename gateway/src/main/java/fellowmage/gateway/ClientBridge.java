@@ -395,6 +395,28 @@ public final class ClientBridge implements MageClient {
                 return;
             case "userDecks":
                 send(msg("userDecks").with("decks", deckService.userDeckSummaries()));
+                // decks vinculados ao Moxfield: confere em segundo plano e reenvia a lista se algo mudou
+                deckService.syncStaleAsync(() -> worker.submit(this::sendDeckLists));
+                return;
+            case "linkMoxfield": {
+                String path = deckService.linkMoxfield(str(cmd, "url"));
+                sendDeckLists();
+                send(msg("moxfieldLinked").with("path", path));
+                return;
+            }
+            case "syncMoxfield":
+                deckService.syncMoxfield(str(cmd, "path"), true);
+                sendDeckLists();
+                send(msg("userMessage").with("lines", List.of("Deck atualizado a partir do Moxfield.")));
+                return;
+            case "setMoxfieldSubstitute":
+                deckService.setMoxfieldSubstitute(str(cmd, "path"), str(cmd, "card"),
+                        cmd.has("substitute") && cmd.get("substitute").isJsonObject() ? cmd.getAsJsonObject("substitute") : null);
+                sendDeckLists();
+                return;
+            case "unlinkMoxfield":
+                deckService.unlinkMoxfield(str(cmd, "path"));
+                sendDeckLists();
                 return;
             case "loadDeck":
                 send(msg("deck").with("deck", deckService.toEditor(str(cmd, "path"))));
@@ -406,9 +428,8 @@ public final class ClientBridge implements MageClient {
                 return;
             }
             case "deleteDeck":
-                decks.deleteUserDeck(str(cmd, "path"));
-                send(msg("userDecks").with("decks", deckService.userDeckSummaries()));
-                send(msg("decks").with("decks", decks.list()));
+                deckService.delete(str(cmd, "path"));
+                sendDeckLists();
                 return;
             case "importDecklist":
                 send(msg("decklist").with("result", deckService.importText(str(cmd, "text"))));
@@ -1468,6 +1489,11 @@ public final class ClientBridge implements MageClient {
     }
 
     // ------------------------------------------------------------------ util
+
+    private void sendDeckLists() {
+        send(msg("userDecks").with("decks", deckService.userDeckSummaries()));
+        send(msg("decks").with("decks", decks.list()));
+    }
 
     private void sendError(String message) {
         send(msg("error").with("message", message));

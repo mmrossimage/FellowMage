@@ -57,6 +57,10 @@ type State = {
   /** deck aberto no editor: caminho (null = deck novo) e texto a importar ao abrir */
   editor?: { path: string | null; importText?: string };
   userDecks: DeckSummary[];
+  /** consulta ao Moxfield em andamento: 'link' (vinculando) ou o caminho do deck sendo atualizado */
+  moxfieldBusy?: string;
+  linkMoxfield: (url: string) => void;
+  syncMoxfield: (path: string) => void;
   /** deck pré-selecionado na tela "Jogar" */
   playDeck?: string;
 
@@ -171,6 +175,15 @@ export const useStore = create<State>((set, get) => {
       case 'userDecks':
         set({ userDecks: m.decks });
         break;
+      case 'moxfieldLinked': {
+        // a lista de decks chega antes desta confirmação
+        const missing = get().userDecks.find((d) => d.path === m.path)?.moxfield?.missing.filter((x) => !x.substitute) ?? [];
+        const text = missing.length
+          ? `Deck vinculado ao Moxfield. Fora do XMage (ainda não implementadas): ${missing.map((x) => x.name).join(', ')} — clique no aviso ⚠ do deck para escolher substitutos.`
+          : 'Deck vinculado ao Moxfield.';
+        set({ moxfieldBusy: undefined, toast: { text, tone: 'info' } });
+        break;
+      }
       case 'stops':
         set({ stops: m.stops });
         break;
@@ -296,7 +309,7 @@ export const useStore = create<State>((set, get) => {
         break;
       case 'error':
       case 'gameError':
-        set({ toast: { text: m.message, tone: 'error' }, localServerStarting: false, tableBusy: false });
+        set({ toast: { text: m.message, tone: 'error' }, localServerStarting: false, tableBusy: false, moxfieldBusy: undefined });
         pushLog({ kind: 'error', html: m.message });
         if (get().status === 'connecting') set({ status: 'offline' });
         if (get().status === 'starting') set({ status: 'online' });
@@ -305,7 +318,7 @@ export const useStore = create<State>((set, get) => {
         pushLog({ kind: 'system', html: m.message });
         break;
       case 'userMessage':
-        set({ toast: { text: m.lines.join(' — '), tone: 'info' } });
+        set({ toast: { text: m.lines.join(' — '), tone: 'info' }, moxfieldBusy: undefined });
         break;
       case 'deckBuild':
         set({ deckBuild: { ...m.build, since: Date.now() } });
@@ -383,6 +396,14 @@ export const useStore = create<State>((set, get) => {
       }),
 
     refreshUserDecks: () => get().send({ t: 'userDecks' }),
+    linkMoxfield: (url) => {
+      set({ moxfieldBusy: 'link' });
+      get().send({ t: 'linkMoxfield', url });
+    },
+    syncMoxfield: (path) => {
+      set({ moxfieldBusy: path });
+      get().send({ t: 'syncMoxfield', path });
+    },
 
     connect: (host, port, user, mode) => {
       lastConnect = { host, port, user, mode };

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../store';
 import { DeckTile } from './HomeScreen';
 
@@ -9,6 +9,19 @@ export function DecksScreen() {
   const send = useStore((s) => s.send);
   const [text, setText] = useState('');
   const [filter, setFilter] = useState('');
+  const [moxUrl, setMoxUrl] = useState('');
+  const linkMoxfield = useStore((s) => s.linkMoxfield);
+  const linking = useStore((s) => s.moxfieldBusy === 'link');
+  const refreshUserDecks = useStore((s) => s.refreshUserDecks);
+  // pedir a lista também confere no Moxfield os decks vinculados (no máximo a cada 10 min)
+  useEffect(() => refreshUserDecks(), [refreshUserDecks]);
+  const moxValid = /^(https?:\/\/)?(www\.)?moxfield\.com\/decks\/[A-Za-z0-9_-]{8,}|^[A-Za-z0-9_-]{8,}$/.test(moxUrl.trim());
+
+  const submitMoxfield = () => {
+    if (!moxValid || linking) return;
+    linkMoxfield(moxUrl.trim());
+    setMoxUrl('');
+  };
 
   const samples = useMemo(
     () => decks.filter((d) => d.startsWith('Commander/') && d.toLowerCase().includes(filter.toLowerCase())),
@@ -42,6 +55,36 @@ export function DecksScreen() {
             ))}
           </div>
         )}
+      </section>
+
+      <section className="mt-10">
+        <h2 className="mb-3 text-xs uppercase tracking-wider text-white/50">Vincular deck do Moxfield</h2>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            submitMoxfield();
+          }}
+          className="flex gap-2"
+        >
+          <input
+            value={moxUrl}
+            onChange={(e) => setMoxUrl(e.target.value)}
+            placeholder="https://moxfield.com/decks/…"
+            className="input flex-1"
+          />
+          <button
+            type="submit"
+            disabled={!moxValid || linking}
+            className="shrink-0 rounded-xl bg-white/10 px-5 text-sm font-semibold text-white ring-1 ring-white/15 transition hover:bg-white/20 disabled:opacity-40"
+          >
+            {linking ? 'Baixando…' : 'Vincular'}
+          </button>
+        </form>
+        <p className="mt-2 text-xs text-white/40">
+          O deck entra em “Meus decks” e é atualizado sozinho quando muda no Moxfield (conferido ao abrir esta tela, no
+          máximo a cada 10 minutos, ou pelo botão ↻). Só funciona com decks públicos ou não listados. Edições feitas aqui
+          num deck vinculado são substituídas na próxima alteração feita no Moxfield.
+        </p>
       </section>
 
       <section className="mt-10 grid grid-cols-2 gap-8">
