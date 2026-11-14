@@ -459,10 +459,17 @@ public final class ClientBridge implements MageClient {
             case "sendManaType":
                 session.sendPlayerManaType(gameId, playerId, ManaType.valueOf(str(cmd, "mana")));
                 break;
-            case "action":
+            case "action": {
                 // data: id de jogador (ver mão, permissões) ou número de turnos (ROLLBACK_TURNS), como no PlayAreaPanel
-                session.sendPlayerAction(PlayerAction.valueOf(str(cmd, "action")), gameId, actionData(cmd));
+                PlayerAction action = PlayerAction.valueOf(str(cmd, "action"));
+                if (action == PlayerAction.PASS_PRIORITY_UNTIL_END_STEP_BEFORE_MY_NEXT_TURN) {
+                    armEndStepStop();
+                } else if (action.name().startsWith("PASS_PRIORITY_")) {
+                    restoreEndStepStop(); // outra ação de passar desliga o F11 no servidor
+                }
+                session.sendPlayerAction(action, gameId, actionData(cmd));
                 break;
+            }
             case "concede":
                 session.sendPlayerAction(PlayerAction.CONCEDE, gameId, null);
                 break;
@@ -656,11 +663,16 @@ public final class ClientBridge implements MageClient {
 
     private void setStops(JsonObject stops) {
         UserSkipPrioritySteps s = userData.getUserSkipPrioritySteps();
-        applyStops(s.getYourTurn(), stops.getAsJsonObject("yourTurn"));
-        applyStops(s.getOpponentTurn(), stops.getAsJsonObject("opponentTurn"));
-        if (session != null && session.isConnected()) {
-            session.updatePreferencesForServer(userData);
+        synchronized (this) {
+            applyStops(s.getYourTurn(), stops.getAsJsonObject("yourTurn"));
+            applyStops(s.getOpponentTurn(), stops.getAsJsonObject("opponentTurn"));
+            if (savedOpponentEndStop != null) {
+                // F11 ativo: a escolha do usuário fica guardada para depois, a parada continua ligada
+                savedOpponentEndStop = s.getOpponentTurn().isEndOfTurn();
+                s.getOpponentTurn().setEndOfTurn(true);
+            }
         }
+        pushPreferences();
         send(msg("stops").with("stops", stopsToJson()));
     }
 
@@ -690,7 +702,12 @@ public final class ClientBridge implements MageClient {
         UserSkipPrioritySteps s = userData.getUserSkipPrioritySteps();
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("yourTurn", stepsToJson(s.getYourTurn()));
-        m.put("opponentTurn", stepsToJson(s.getOpponentTurn()));
+        Map<String, Boolean> opp = stepsToJson(s.getOpponentTurn());
+        Boolean saved = savedOpponentEndStop;
+        if (saved != null) {
+            opp.put("endOfTurn", saved); // mostra a preferência do usuário, não a parada temporária do F11
+        }
+        m.put("opponentTurn", opp);
         return m;
     }
 
@@ -1243,6 +1260,7 @@ public final class ClientBridge implements MageClient {
                 // senão uma reconexão do navegador reabre um tabuleiro que ninguém mais atualiza
                 gameId = null;
                 watching = false;
+                restoreEndStepStop();
                 String text = data instanceof GameClientMessage ? ((GameClientMessage) data).getMessage() : String.valueOf(data);
                 send(msg("gameOver").with("message", text));
                 break;
@@ -1443,9 +1461,68 @@ public final class ClientBridge implements MageClient {
         return p;
     }
 
+    // ------------------------------------------------------------------ F11: parar na etapa final antes do meu turno
+    //
+    // No servidor (HumanPlayer.priority), o F11 passa até a etapa final do jogador anterior a mim, desliga a
+    // flag e então ainda consulta as paradas do usuário (checkPassStep): sem "etapa final" marcada nas paradas
+    // do turno do oponente, passa de novo e o F11 nunca para. O cliente oficial não sofre disso porque marca
+    // todas as paradas por padrão (PreferencesDialog: END_OF_TURN_OTHERS = "on"); aqui o padrão é o do
+    // servidor (desmarcada). Então ligamos essa parada só enquanto o F11 estiver ativo e devolvemos a
+    // preferência do usuário quando a flag do servidor (PlayerView.isPassedUntilEndStepBeforeMyTurn) cai.
+
+    /** valor do usuário guardado enquanto a parada está ligada por nós (null = nada a restaurar) */
+    private Boolean savedOpponentEndStop;
+    /** já vimos o servidor com o F11 ativo (antes disso a flag ainda pode chegar falsa) */
+    private boolean endStepPassSeen;
+
+    private synchronized void armEndStepStop() {
+        SkipPrioritySteps opp = userData.getUserSkipPrioritySteps().getOpponentTurn();
+        endStepPassSeen = false;
+        if (savedOpponentEndStop != null || opp.isEndOfTurn()) {
+            return; // já ligada (por nós ou pelo usuário)
+        }
+        savedOpponentEndStop = false;
+        opp.setEndOfTurn(true);
+        pushPreferences();
+    }
+
+    private synchronized void restoreEndStepStop() {
+        if (savedOpponentEndStop == null) {
+            return;
+        }
+        userData.getUserSkipPrioritySteps().getOpponentTurn().setEndOfTurn(savedOpponentEndStop);
+        savedOpponentEndStop = null;
+        endStepPassSeen = false;
+        pushPreferences();
+    }
+
+    private synchronized void trackEndStepPass(GameView view) {
+        if (savedOpponentEndStop == null || playerId == null) {
+            return;
+        }
+        for (mage.view.PlayerView p : view.getPlayers()) {
+            if (playerId.equals(p.getPlayerId())) {
+                if (p.isPassedUntilEndStepBeforeMyTurn()) {
+                    endStepPassSeen = true;
+                } else if (endStepPassSeen) {
+                    restoreEndStepStop(); // parou na etapa final (ou o F11 foi cancelado)
+                }
+                return;
+            }
+        }
+    }
+
+    private void pushPreferences() {
+        Session s = session;
+        if (s != null && s.isConnected()) {
+            s.updatePreferencesForServer(userData);
+        }
+    }
+
     private void sendGame(String method, GameView view, Map<String, Object> prompt) {
         Msg m = msg("game").with("method", method);
         if (view != null) {
+            trackEndStepPass(view);
             m.with("game", ViewMapper.game(view));
         }
         if (prompt != null) {
