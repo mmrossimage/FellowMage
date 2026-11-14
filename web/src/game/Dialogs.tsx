@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useStore } from '../store';
 import type { Card, Prompt } from '../types';
 import { promptHtml } from '../i18n';
-import { cx, sanitizeHtml } from '../util';
+import { cx, rulesToHtml, sanitizeHtml } from '../util';
 import { CardFace } from './CardFace';
 import { HIGHLIGHT_CLASS, isPromptTarget, optionIds, promptListsTargets } from './interaction';
 
@@ -45,8 +45,9 @@ export function PromptDialogs() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6 backdrop-blur-sm"
+        className="fixed inset-0 z-50 flex items-center justify-center gap-6 bg-black/60 p-6 backdrop-blur-sm"
       >
+        {prompt.kind !== 'ability' && <PromptSource />}
         <motion.div
           initial={{ scale: 0.92, y: 12 }}
           animate={{ scale: 1, y: 0 }}
@@ -56,6 +57,36 @@ export function PromptDialogs() {
         </motion.div>
       </motion.div>
     </AnimatePresence>
+  );
+}
+
+/**
+ * O XMage não diz qual carta pediu a escolha (ex.: "Choose a card name" do ChooseACardNameEffect só traz o texto).
+ * Mas quase toda escolha acontece enquanto algo resolve ou é conjurado, e o objeto fica no topo da pilha até
+ * terminar (GameImpl.resolve só o remove depois): mostramos esse objeto ao lado do diálogo, para dar contexto.
+ */
+function PromptSource() {
+  const top = useStore((s) => s.game?.stack[0]); // XMage envia a pilha do topo para o fundo
+  const setHovered = useStore((s) => s.setHovered);
+  if (!top) return null;
+  const name = top.ability ? top.sourceName ?? top.name : top.name;
+  return (
+    <motion.aside
+      initial={{ opacity: 0, x: -24 }}
+      animate={{ opacity: 1, x: 0 }}
+      onMouseEnter={() => setHovered(top.id)}
+      onMouseLeave={() => setHovered(undefined)}
+      className="hidden w-60 shrink-0 flex-col gap-2 lg:flex"
+    >
+      <div className="text-[11px] uppercase tracking-[0.2em] text-white/50">Topo da pilha</div>
+      <CardFace card={top} overlays={false} className="w-full shadow-target" />
+      <div className="rounded-xl border border-white/10 bg-ink-900/95 p-3 text-xs shadow-panel">
+        <div className="font-semibold text-white">{name}</div>
+        {top.ability && top.rules[0] && (
+          <div className="mt-1 text-white/70" dangerouslySetInnerHTML={{ __html: rulesToHtml(top.rules[0], name) }} />
+        )}
+      </div>
+    </motion.aside>
   );
 }
 
