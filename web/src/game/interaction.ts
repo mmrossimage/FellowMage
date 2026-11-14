@@ -10,10 +10,23 @@ export function optionIds(prompt: Prompt | undefined, key: string): string[] {
   return Array.isArray(v) ? (v as string[]) : [];
 }
 
+/**
+ * Alvo válido no pedido atual: `targets` da mensagem ou a opção `possibleTargets`
+ * (HumanPlayer.choose/chooseTarget; o cliente oficial marca essas cartas como selecionáveis no GamePanel).
+ */
+export function isPromptTarget(card: Card, prompt: Prompt | undefined): boolean {
+  return !!prompt && (!!prompt.targets?.includes(card.id) || optionIds(prompt, 'possibleTargets').includes(card.id) || !!card.choosable);
+}
+
+/** O pedido de alvo diz quais cartas valem? (sem essa informação, todas as cartas mostradas podem ser escolhidas) */
+export function promptListsTargets(prompt: Prompt | undefined): boolean {
+  return !!prompt && (!!prompt.targets || Array.isArray(prompt.options?.['possibleTargets']));
+}
+
 /** O pedido atual do XMage é a fonte de verdade para cliques em cartas de qualquer zona. */
 export function canChooseCard(card: Card, prompt: Prompt | undefined, waiting: boolean): boolean {
   if (!waiting || !prompt || !CLICKABLE_KINDS.has(prompt.kind)) return false;
-  const target = prompt.targets?.includes(card.id) ?? false;
+  const target = isPromptTarget(card, prompt);
   if (prompt.kind === 'target') return target;
   if (prompt.kind === 'select') return target || !!card.playable;
   return !!card.playable;
@@ -33,7 +46,7 @@ export function combatRoles(game: Game | undefined) {
 export function highlightFor(card: Card, game: Game | undefined, prompt: Prompt | undefined, waiting: boolean): Highlight {
   if (card.selected || (waiting && optionIds(prompt, 'chosenTargets').includes(card.id))) return 'selected';
   if (waiting && prompt) {
-    if (prompt.targets?.includes(card.id)) return 'target';
+    if (isPromptTarget(card, prompt)) return 'target';
     if (prompt.kind === 'select') {
       if (optionIds(prompt, 'possibleAttackers').includes(card.id)) return 'playable';
       if (optionIds(prompt, 'possibleBlockers').includes(card.id)) return 'playable';

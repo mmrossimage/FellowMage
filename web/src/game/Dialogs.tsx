@@ -5,7 +5,7 @@ import type { Card, Prompt } from '../types';
 import { promptHtml } from '../i18n';
 import { cx, sanitizeHtml } from '../util';
 import { CardFace } from './CardFace';
-import { HIGHLIGHT_CLASS, optionIds } from './interaction';
+import { HIGHLIGHT_CLASS, isPromptTarget, optionIds, promptListsTargets } from './interaction';
 
 /** Diálogos modais para pedidos que não são "clique no tabuleiro". */
 export function PromptDialogs() {
@@ -230,12 +230,14 @@ function CardPickDialog({ prompt, onPeek }: { prompt: Prompt; onPeek: () => void
   const opts = prompt.options ?? {};
   // já escolhidas: o XMage manda em "chosenTargets" (HumanPlayer.chooseTarget), como no tabuleiro
   const chosen = new Set(optionIds(prompt, 'chosenTargets'));
+  // numa busca no grimório o XMage manda o grimório inteiro e só as permitidas em "possibleTargets"
+  const listsTargets = promptListsTargets(prompt);
   return (
     <>
       <Title html={prompt.message} sub={opts['secondMessage'] as string | undefined} />
       <div className="grid grid-cols-[repeat(auto-fill,minmax(130px,1fr))] gap-3">
         {prompt.cards1!.map((c) => {
-          const can = !prompt.targets || prompt.targets.includes(c.id);
+          const can = !listsTargets || isPromptTarget(c, prompt);
           const isChosen = !!c.selected || chosen.has(c.id);
           return (
             <button
