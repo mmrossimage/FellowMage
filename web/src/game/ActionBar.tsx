@@ -6,6 +6,11 @@ import { cx, sanitizeHtml } from '../util';
 
 type Btn = { label: string; onClick: () => void; tone?: 'primary' | 'secondary' | 'danger'; hotkey?: string };
 
+/** textos do botão especial enviados pelo XMage (Constants.Option.SPECIAL_BUTTON) */
+const SPECIAL_LABELS: Record<string, string> = {
+  'All attack': 'Atacar com todos',
+};
+
 /**
  * Barra de ação no canto inferior direito: mostra o pedido atual do servidor
  * e os botões equivalentes aos "esquerdo/direito/especial" do cliente XMage.
@@ -46,8 +51,11 @@ export function ActionBar() {
         buttons.push({ label: 'Cancelar', onClick: () => respondBoolean(false), tone: 'secondary' });
         break;
     }
-    if (game?.special && ['select', 'target', 'playMana', 'playXMana'].includes(prompt.kind)) {
-      buttons.push({ label: (opts['specialButton'] as string) || 'Especial', onClick: () => respondString('special'), tone: 'secondary' });
+    // botão especial, como o FeedbackPanel do cliente oficial: aparece quando o pedido traz "specialButton"
+    // (ex.: "All attack" ao declarar atacantes, HumanPlayer.selectAttackers) ou há ações especiais (game.special)
+    const specialText = opts['specialButton'] as string | undefined;
+    if ((specialText || game?.special) && ['select', 'target', 'playMana', 'playXMana'].includes(prompt.kind)) {
+      buttons.push({ label: SPECIAL_LABELS[specialText ?? ''] ?? (specialText || 'Especial'), onClick: () => respondString('special'), tone: 'secondary' });
     }
   }
 
