@@ -20,6 +20,18 @@ const AI_LEVELS = [
   { skill: 7, label: 'Forte', desc: 'mais desafiadora, turnos lentos' },
 ];
 
+const FREE_MULLIGANS_KEY = 'fm.freeMulligans';
+
+/** última escolha de mulligans grátis neste navegador (0 se não houver ou o armazenamento falhar) */
+function loadFreeMulligans(): number {
+  try {
+    const n = Number(localStorage.getItem(FREE_MULLIGANS_KEY));
+    return Number.isInteger(n) && n >= 0 && n <= 5 ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
 const deckLabel = (path: string) => {
   const parts = path.replace(/\.dck$/i, '').split('/');
   return { name: parts[parts.length - 1], folder: parts.slice(0, -1).join(' / ') };
@@ -42,6 +54,15 @@ export function LobbyScreen() {
   const [deck, setDeck] = useState(playDeck ?? RANDOM);
   const [opponentDecks, setOpponentDecks] = useState<string[]>([RANDOM, RANDOM, RANDOM]);
   const [aiSkill, setAiSkill] = useState(4);
+  const [freeMulligans, setFreeMulligansState] = useState(loadFreeMulligans);
+  const setFreeMulligans = (n: number) => {
+    setFreeMulligansState(n);
+    try {
+      localStorage.setItem(FREE_MULLIGANS_KEY, String(n));
+    } catch {
+      // sem armazenamento: vale só nesta tela
+    }
+  };
 
   // seus decks primeiro, depois os exemplos do formato
   const pool = useMemo(
@@ -126,6 +147,26 @@ export function LobbyScreen() {
           </div>
         )}
 
+        <div className="mt-4 flex items-center gap-3">
+          <span className="text-xs uppercase tracking-wider text-white/50">Mulligans grátis</span>
+          {[0, 1, 2, 3, 4, 5].map((n) => (
+            <button
+              key={n}
+              onClick={() => setFreeMulligans(n)}
+              className={cx('h-9 w-9 rounded-lg font-semibold ring-1 transition', freeMulligans === n ? 'bg-ember-500 text-ink-950 ring-ember-400' : 'bg-black/30 text-white/70 ring-white/10 hover:text-white')}
+            >
+              {n}
+            </button>
+          ))}
+          <span className="text-xs text-white/40">
+            {freeMulligans === 0
+              ? 'só a regra normal de mulligan'
+              : freeMulligans === 1
+                ? 'o primeiro mulligan não custa carta, para todos'
+                : `os ${freeMulligans} primeiros mulligans não custam carta, para todos`}
+          </span>
+        </div>
+
         <div className="mt-6 grid grid-cols-[1.1fr_1fr] gap-6">
           <DeckPicker title="Seu deck" decks={pool} value={deck} onChange={setDeck} />
           <div>
@@ -163,7 +204,7 @@ export function LobbyScreen() {
 
         <button
           disabled={status === 'starting' || pool.length === 0}
-          onClick={() => startGame(formatId, deck || undefined, opponentDecks.slice(0, nOpp).map((d) => d || null), aiSkill)}
+          onClick={() => startGame(formatId, deck || undefined, opponentDecks.slice(0, nOpp).map((d) => d || null), aiSkill, freeMulligans)}
           className="mt-8 w-full rounded-xl bg-gradient-to-b from-ember-400 to-ember-500 py-3.5 font-display text-lg font-bold uppercase tracking-wider text-ink-950 transition hover:brightness-110 disabled:opacity-60"
         >
           {status === 'starting' ? 'Preparando a mesa…' : `Começar ${format.label}`}

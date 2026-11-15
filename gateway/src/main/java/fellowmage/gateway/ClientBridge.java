@@ -193,7 +193,8 @@ public final class ClientBridge implements MageClient {
                     cmd.getAsJsonArray("opponents").forEach(e -> opponentDecks.add(e.isJsonNull() ? null : e.getAsString()));
                 }
                 startGame(GameFormat.byId(str(cmd, "format")), str(cmd, "deck"), opponentDecks,
-                        cmd.has("aiSkill") ? cmd.get("aiSkill").getAsInt() : 6);
+                        cmd.has("aiSkill") ? cmd.get("aiSkill").getAsInt() : 6,
+                        cmd.has("freeMulligans") ? cmd.get("freeMulligans").getAsInt() : 0);
                 return;
             }
             case "setStops":
@@ -558,7 +559,7 @@ public final class ClientBridge implements MageClient {
                 .with("stops", stopsToJson()).with("inGame", false));
     }
 
-    private void startGame(GameFormat format, String deckPath, List<String> opponentDecks, int aiSkill) throws Exception {
+    private void startGame(GameFormat format, String deckPath, List<String> opponentDecks, int aiSkill, int freeMulligans) throws Exception {
         if (session == null || !session.isConnected()) {
             sendError("Conecte-se ao servidor antes de iniciar uma partida.");
             return;
@@ -597,6 +598,9 @@ public final class ClientBridge implements MageClient {
         options.setAttackOption(MultiplayerAttackOption.MULTIPLE);
         options.setRange(RangeOfInfluence.ALL);
         options.setWinsNeeded(1);
+        // mulligans grátis: o *Match de cada tipo de jogo passa isso ao Mulligan (getMulligan(getFreeMulligans()));
+        // 0 a 5, o mesmo limite do cliente oficial (CustomOptionsDialog)
+        options.setFreeMulligans(Math.max(0, Math.min(5, freeMulligans)));
         options.setMatchTimeLimit(MatchTimeLimit.NONE);
         // partidas só contra IA: não barrar por "taxa de abandono" (o servidor recusa a mesa com
         // "incompatible quit ratio" se o usuário saiu de muitas partidas antes)

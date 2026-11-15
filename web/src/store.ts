@@ -91,7 +91,8 @@ type State = {
   /** comando ao gateway que espera uma resposta do tipo `t` */
   request: <T extends ServerMsg['t']>(cmd: Record<string, unknown>, t: T) => Promise<Extract<ServerMsg, { t: T }>>;
   refreshUserDecks: () => void;
-  startGame: (format: FormatId, deck: string | undefined, opponents: (string | null)[], aiSkill: number) => void;
+  /** freeMulligans: mulligans grátis por jogador (0 a 5, MatchOptions.setFreeMulligans) */
+  startGame: (format: FormatId, deck: string | undefined, opponents: (string | null)[], aiSkill: number, freeMulligans: number) => void;
   toggleStop: (turn: keyof Stops, key: StopKey) => void;
   send: (cmd: Record<string, unknown>) => void;
   respondUUID: (id: string) => void;
@@ -425,9 +426,9 @@ export const useStore = create<State>((set, get) => {
       set({ status: 'offline', view: 'home', mode: undefined, localServerStarting: false, table: undefined, tables: [], chats: { room: [], table: [] }, lobbyOptions: undefined, game: undefined, prompt: undefined, waiting: false, server: undefined, clientVersion: undefined, serverVersion: undefined, deckBuild: undefined, userRequests: [], tournament: undefined, draft: undefined });
     },
 
-    startGame: (format, deck, opponents, aiSkill) => {
+    startGame: (format, deck, opponents, aiSkill, freeMulligans) => {
       set({ status: 'starting', result: undefined });
-      get().send({ t: 'startGame', format, deck, opponents, aiSkill });
+      get().send({ t: 'startGame', format, deck, opponents, aiSkill, freeMulligans });
     },
 
     toggleStop: (turn, key) => {
