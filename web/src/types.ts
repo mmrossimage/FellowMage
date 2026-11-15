@@ -397,7 +397,7 @@ export type ServerMsg =
   | { t: 'stops'; stops: Stops }
   | { t: 'tableReady'; format: string; deck: string; opponents: string[] }
   | { t: 'gameStarted'; gameId: string; playerId: string | null; watching?: boolean }
-  | { t: 'game'; method: string; game?: Game; prompt?: Prompt }
+  | { t: 'game'; method: string; gameId?: string | null; game?: Game; prompt?: Prompt }
   | { t: 'gameOver'; message: string }
   | { t: 'endGame'; won: boolean; title: string; info: string; extra?: string; matchOver?: boolean; wins?: number; winsNeeded?: number }
   | { t: 'chat'; chat?: ChatKind; message: string; turnInfo?: string; username?: string; type: string }

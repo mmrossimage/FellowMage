@@ -93,6 +93,16 @@ public final class ClientBridge implements MageClient {
     private UUID ownTableId;
     private UUID gameId;
     private UUID playerId;
+    /** chat do jogo atual (o log da partida chega por ele) */
+    private volatile UUID gameChatId;
+    // Só o jogo aberto na tela recebe callbacks de jogo, como no cliente oficial (CallbackClientImpl ignora
+    // jogos sem painel: MageFrame.getGame(objectId) == null). Ao sair de uma mesa o servidor encerra o jogo
+    // (removeTable -> game.end()), mas as IAs ainda jogam por ~1-2 min até ele parar e tudo isso chega ao
+    // usuário, inclusive o GAME_OVER ("derrota"); jogos órfãos de uma conexão anterior com o mesmo nome também.
+    // Diferente de gameId, não é zerado no GAME_OVER: o END_GAME_INFO (resultado) chega depois dele.
+    private volatile UUID openGameId;
+    private final java.util.Set<UUID> leftChats = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private final java.util.Set<UUID> reportedOtherGames = java.util.concurrent.ConcurrentHashMap.newKeySet();
     // mesa em que estamos (criada por nós ou de outro jogador) e o deck usado nela,
     // reenviado sem alterações quando o servidor abre o sideboard entre os jogos
     private UUID currentTableId;
@@ -745,6 +755,12 @@ public final class ClientBridge implements MageClient {
             session.stopReplay(replayId);
             replayId = null;
         }
+        openGameId = null;
+        if (gameChatId != null) {
+            leftChats.add(gameChatId);
+            session.leaveChat(gameChatId);
+            gameChatId = null;
+        }
         if (gameId != null && watching) {
             session.stopWatching(gameId);
             gameId = null;
@@ -759,6 +775,8 @@ public final class ClientBridge implements MageClient {
         }
         // durante um torneio a mesa dele continua (sair de um jogo não desfaz o torneio dos outros)
         if (ownTableId != null && tournamentId == null) {
+            // o servidor encerra o jogo (TableManagerImpl.removeTable -> game.end()), mas as IAs ainda terminam
+            // o que estavam pensando: o jogo antigo segue mandando atualizações por ~1-2 min (ver leftGames)
             session.removeTable(roomId, ownTableId);
             ownTableId = null;
         }
@@ -1029,6 +1047,28 @@ public final class ClientBridge implements MageClient {
         return null;
     }
 
+    /** Callback de outro jogo que não o aberto na tela (ou do chat de um jogo que já deixamos). */
+    private boolean isFromLeftGame(ClientCallback callback) {
+        UUID id = callback.getObjectId();
+        if (id == null) {
+            return false;
+        }
+        String method = callback.getMethod().name();
+        if (method.startsWith("GAME_") || "END_GAME_INFO".equals(method)) {
+            if (!id.equals(openGameId)) {
+                if (reportedOtherGames.add(id)) {
+                    System.out.println("Ignorando as mensagens do jogo " + id + " (não é o jogo aberto de " + userName + ")");
+                }
+                return true;
+            }
+            return false;
+        }
+        if ("CHATMESSAGE".equals(method)) {
+            return leftChats.contains(id);
+        }
+        return false;
+    }
+
     private String chatKind(UUID chatId) {
         if (chatId != null && chatId.equals(roomChatId)) {
             return "room";
@@ -1124,17 +1164,28 @@ public final class ClientBridge implements MageClient {
         }
     }
 
+    /** objeto (jogo, replay...) do callback em processamento: vai junto em cada mensagem "game" */
+    private final ThreadLocal<UUID> callbackObjectId = new ThreadLocal<>();
+
     private void handleCallback(ClientCallback callback) {
         Object data = callback.getData();
+        if (isFromLeftGame(callback)) {
+            return;
+        }
+        callbackObjectId.set(callback.getObjectId());
         switch (callback.getMethod()) {
             case START_GAME: {
                 TableClientMessage m = (TableClientMessage) data;
                 gameId = m.getGameId();
+                openGameId = gameId;
                 playerId = m.getPlayerId();
                 watching = false;
                 session.joinGame(gameId);
                 // o log da partida chega como mensagens do chat do jogo
-                session.getGameChatId(gameId).ifPresent(session::joinChat);
+                gameChatId = session.getGameChatId(gameId).orElse(null);
+                if (gameChatId != null) {
+                    session.joinChat(gameChatId);
+                }
                 send(msg("gameStarted").with("gameId", gameId).with("playerId", playerId));
                 break;
             }
@@ -1142,11 +1193,15 @@ public final class ClientBridge implements MageClient {
                 // espectador: mesmo tabuleiro, sem jogador próprio (GamePanel.watchGame no cliente oficial)
                 TableClientMessage m = (TableClientMessage) data;
                 gameId = callback.getObjectId();
+                openGameId = gameId;
                 playerId = null;
                 watching = true;
                 currentTableId = m.getCurrentTableId();
                 session.watchGame(gameId);
-                session.getGameChatId(gameId).ifPresent(session::joinChat);
+                gameChatId = session.getGameChatId(gameId).orElse(null);
+                if (gameChatId != null) {
+                    session.joinChat(gameChatId);
+                }
                 send(msg("gameStarted").with("gameId", gameId).with("playerId", null).with("watching", true));
                 break;
             }
@@ -1524,7 +1579,8 @@ public final class ClientBridge implements MageClient {
     }
 
     private void sendGame(String method, GameView view, Map<String, Object> prompt) {
-        Msg m = msg("game").with("method", method);
+        // o navegador também ignora atualizações de outro jogo (segunda proteção além de isFromLeftGame)
+        Msg m = msg("game").with("method", method).with("gameId", callbackObjectId.get());
         if (view != null) {
             trackEndStepPass(view);
             m.with("game", ViewMapper.game(view));
@@ -1553,6 +1609,7 @@ public final class ClientBridge implements MageClient {
     @Override
     public void disconnected(boolean askToReconnect, boolean keepMySessionActive) {
         gameId = null;
+        openGameId = null;
         send(msg("disconnected"));
     }
 

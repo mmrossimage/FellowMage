@@ -249,6 +249,10 @@ export const useStore = create<State>((set, get) => {
         set({ serverMessages: m.messages });
         break;
       case 'game': {
+        // atualização de um jogo que não é o atual (ex.: o jogo deixado ainda terminando no servidor):
+        // ignora, como o cliente oficial faz com jogos sem painel aberto. Replays usam outro id.
+        const current = get().gameId;
+        if (m.gameId && current && m.gameId !== current && !m.method.startsWith('REPLAY_')) break;
         // GAME_UPDATE sem prompt não altera o pedido pendente
         const patch: Partial<State> = {};
         if (m.game) patch.game = m.game;
