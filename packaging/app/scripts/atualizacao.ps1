@@ -75,6 +75,8 @@ function Update-FellowMage {
         [IO.Compression.ZipFile]::ExtractToDirectory($zip, $tmp)
         $novo = Join-Path $tmp 'FellowMage'
         $baixada = [IO.File]::ReadAllText((Join-Path $novo 'versao.json'), $Utf8).TrimStart([char]0xFEFF) | ConvertFrom-Json
+        # logo apos publicar, o GitHub pode demorar alguns minutos para apontar "latest" para o release novo
+        if ($baixada.versao -ne $remota.versao) { throw "o pacote baixado e da versao $($baixada.versao), esperava $($remota.versao). Tente mais tarde." }
         foreach ($p in $pastas) { if (-not (Test-Path (Join-Path $novo $p))) { throw "Pacote incompleto: falta '$p'." } }
 
         Stop-JavaEmbutido
