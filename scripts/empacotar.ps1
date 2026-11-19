@@ -68,8 +68,13 @@ Copy-Item -Recurse (Join-Path $Root 'web\dist') (Join-Path $Out 'web')
 
 Step 'Gateway (jar + dependencias)'
 Push-Location (Join-Path $Root 'gateway')
-mvn -B -q package dependency:copy-dependencies "-DoutputDirectory=target/lib" -DincludeScope=runtime | Out-Host; Check 'mvn package (gateway)'
+# clean: copy-dependencies nao apaga jars antigos de target/lib; com duas versoes do XMage no
+# classpath, o gateway pode se apresentar ao servidor com a versao velha ("Wrong client version")
+mvn -B -q clean package dependency:copy-dependencies "-DoutputDirectory=target/lib" -DincludeScope=runtime | Out-Host; Check 'mvn package (gateway)'
 Pop-Location
+$mageJars = Get-ChildItem (Join-Path $Root 'gateway\target\lib') -Filter 'mage-*.jar' |
+    Where-Object { $_.Name -match '^mage(-common)?-\d' } | ForEach-Object { $_.Name -replace '^mage(-common)?-|\.jar$', '' } | Sort-Object -Unique
+if (@($mageJars).Count -ne 1) { throw "gateway\target\lib tem mais de uma versao do XMage: $($mageJars -join ', ')" }
 New-Item -ItemType Directory -Force (Join-Path $Out 'gateway') | Out-Null
 Copy-Item (Join-Path $Root 'gateway\target\fellowmage-gateway-0.1.0.jar') (Join-Path $Out 'gateway\fellowmage-gateway.jar')
 Copy-Item -Recurse (Join-Path $Root 'gateway\target\lib') (Join-Path $Out 'gateway\lib')
