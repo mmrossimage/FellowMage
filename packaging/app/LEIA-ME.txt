@@ -18,9 +18,12 @@ REQUISITOS
 - Nao precisa instalar Java nem nada: ja vem tudo na pasta.
 
 ATUALIZACOES
-- Ao abrir "Iniciar FellowMage", o jogo procura uma versao nova (precisa de internet). Se houver,
-  pergunta se deve atualizar: responda S e espere o download. Seus decks continuam onde estao.
-- Sem internet, o jogo abre normalmente com a versao que voce tem.
+- Ao abrir "Iniciar FellowMage", o jogo procura versoes novas (precisa de internet):
+  - do FellowMage (a mesa no navegador), no GitHub — downloads pequenos;
+  - do XMage (regras e cartas novas), no site oficial xmage.today — cerca de 90 MB.
+  Se houver, ele pergunta se deve atualizar: responda S e espere o download. Seus decks continuam
+  onde estao.
+- Sem internet, ou se responder N, o jogo abre normalmente com a versao que voce tem.
 
 SE O WINDOWS RECLAMAR
 - "O Windows protegeu o computador" (SmartScreen): clique em "Mais informacoes" > "Executar assim mesmo".

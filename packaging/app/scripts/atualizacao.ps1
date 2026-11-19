@@ -5,9 +5,10 @@
 $ProgressPreference = 'SilentlyContinue'
 
 # Pastas trocadas inteiras. As de $PastasBase so vem no pacote completo, baixado quando muda a "base"
-# (XMage ou Java). decks\, logs\ e o banco de cartas (server\db) nunca sao apagados.
+# (o Java embutido). O servidor XMage e os decks de exemplo vem do site oficial (Update-Xmage);
+# decks\, logs\ e o banco de cartas (server\db) nunca sao apagados.
 $PastasApp = @('web', 'gateway', 'scripts')
-$PastasBase = @('runtime', 'server', 'sample-decks')
+$PastasBase = @('runtime')
 $Utf8 = New-Object Text.UTF8Encoding($false)
 
 function Read-Url([string]$Url, [int]$TimeoutMs) {
@@ -87,11 +88,9 @@ function Update-FellowMage {
             $movidas += $p
             Move-Item (Join-Path $novo $p) $dest
         }
-        $db = Join-Path $backup 'server\db'
-        if ($completo -and (Test-Path $db)) {
-            $novoDb = Join-Path $Root 'server\db'
-            if (Test-Path $novoDb) { Remove-Item -Recurse -Force $novoDb }
-            Copy-Item -Recurse $db $novoDb
+        # instalacao sem servidor (nao deveria acontecer): usa o que veio no pacote completo
+        foreach ($p in 'server', 'sample-decks') {
+            if (-not (Test-Path (Join-Path $Root $p)) -and (Test-Path (Join-Path $novo $p))) { Move-Item (Join-Path $novo $p) (Join-Path $Root $p) }
         }
         # atalhos, LEIA-ME e versao.json (por ultimo: so marca a versao nova depois de tudo trocado)
         Get-ChildItem $novo -File | Where-Object Name -ne 'versao.json' | Copy-Item -Destination $Root -Force
@@ -111,6 +110,82 @@ function Update-FellowMage {
     }
     Remove-Item -Recurse -Force $backup -ErrorAction SilentlyContinue
     Write-Host "  Atualizado para a versao $($baixada.versao)." -ForegroundColor Green
+    Write-Host ''
+    return $true
+}
+
+# Atualiza o servidor XMage pelo pacote oficial (xmage.today), so dentro da versao com que o gateway
+# deste release foi testado (xmageCompativel no versao.json, ex.: 1.4.63). Builds novos dessa versao
+# (cartas e correcoes) entram; uma versao nova (1.4.64) espera um release do FellowMage compativel.
+function Update-Xmage {
+    $localFile = Join-Path $Root 'versao.json'
+    if (-not (Test-Path $localFile)) { return $false }
+    $local = [IO.File]::ReadAllText($localFile, $Utf8).TrimStart([char]0xFEFF) | ConvertFrom-Json
+    $compat = [string]$local.xmageCompativel
+    if (-not $compat) { return $false }
+    . (Join-Path $PSScriptRoot 'xmage.ps1')
+
+    $server = Join-Path $Root 'server'
+    $numLocal = Get-XmageNumeroInstalado $server
+    $labelLocal = Get-XmageLabelInstalado $server
+    try { $oficial = Get-XmageOficial 5000 } catch { return $false }
+
+    if ($oficial.Numero -ne $compat) {
+        # o FellowMage ainda nao acompanha esta versao (ou o site voltou para uma anterior)
+        if ($numLocal -ne $compat) {
+            Write-Host "  Este FellowMage precisa do XMage $compat, mas o site oficial tem o $($oficial.Numero). Jogar contra a IA pode falhar." -ForegroundColor Red
+            Write-Host ''
+        }
+        return $false
+    }
+    if ($numLocal -eq $compat -and $oficial.Label -eq $labelLocal) { return $false }
+
+    $tmp = Join-Path $Root '.atualizacao-xmage'
+    $backup = Join-Path $Root '.xmage-anterior'
+    foreach ($d in $tmp, $backup) { if (Test-Path $d) { Remove-Item -Recurse -Force $d } }
+    $z = $null
+    $movidas = @()
+    try {
+        $z = Open-XmageZip $oficial.Url (Join-Path $tmp 'download')
+        $mb = Get-XmageTamanhoMB $z.Zip
+        Write-Host "  Nova versao do XMage: $($oficial.Label) (cartas novas e correcoes)." -ForegroundColor Yellow
+        if ($labelLocal) { Write-Host "    voce tem: $labelLocal" -ForegroundColor DarkGray }
+        if ($numLocal -ne $compat) { Write-Host "    Esta versao do FellowMage precisa dela para jogar contra a IA." -ForegroundColor Yellow }
+        $r = Read-Host "  Atualizar o XMage agora? Baixa cerca de $mb MB (S/n)"
+        if ($r -match '^\s*n') { Write-Host ''; return $false }
+
+        Expand-XmageServidor $z.Zip $tmp $oficial.Label $z.Stream
+        Close-XmageZip $z; $z = $null
+        if ((Get-XmageNumeroInstalado (Join-Path $tmp 'server')) -ne $compat) { throw "o pacote baixado nao e do XMage $compat." }
+
+        Stop-JavaEmbutido
+        New-Item -ItemType Directory -Force $backup | Out-Null
+        foreach ($p in 'server', 'sample-decks') {
+            $dest = Join-Path $Root $p
+            if (Test-Path $dest) { Move-Item $dest (Join-Path $backup $p) }
+            $movidas += $p
+            Move-Item (Join-Path $tmp $p) $dest
+        }
+        # banco de cartas: o servidor novo acrescenta as cartas que faltarem ao iniciar
+        $db = Join-Path $backup 'server\db'
+        if (Test-Path $db) { Copy-Item -Recurse $db (Join-Path $server 'db') }
+    } catch {
+        foreach ($p in $movidas) {
+            $dest = Join-Path $Root $p
+            if (Test-Path $dest) { Remove-Item -Recurse -Force $dest }
+            if (Test-Path (Join-Path $backup $p)) { Move-Item (Join-Path $backup $p) $dest }
+        }
+        Write-Host ''
+        Write-Host "  Nao foi possivel atualizar o XMage: $_" -ForegroundColor Red
+        Write-Host '  Continuando com a versao atual.' -ForegroundColor DarkGray
+        Write-Host ''
+        return $false
+    } finally {
+        if ($z) { Close-XmageZip $z }
+        Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
+    }
+    Remove-Item -Recurse -Force $backup -ErrorAction SilentlyContinue
+    Write-Host "  XMage atualizado para $($oficial.Label)." -ForegroundColor Green
     Write-Host ''
     return $true
 }

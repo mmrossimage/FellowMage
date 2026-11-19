@@ -41,12 +41,13 @@ try {
     if (-not $SemVerificar -and -not (Test-Port 8090)) {
         . (Join-Path $PSScriptRoot 'atualizacao.ps1')
         if (Update-FellowMage) {
-            # reinicia com os scripts da versao nova
-            $novoArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $Root 'scripts\iniciar.ps1'), '-SemVerificar')
+            # reinicia com os scripts da versao nova (que tambem conferem o XMage)
+            $novoArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $Root 'scripts\iniciar.ps1'))
             if ($SemNavegador) { $novoArgs += '-SemNavegador' }
             & powershell.exe @novoArgs
             return
         }
+        Update-Xmage | Out-Null
     }
 
     $common = @('--add-opens=java.base/java.io=ALL-UNNAMED')
@@ -55,7 +56,9 @@ try {
         Write-Host '  Gateway ja esta rodando.' -ForegroundColor DarkGray
     } else {
         Write-Host '  Iniciando o FellowMage' -NoNewline
-        $cp = (Join-Path $Root 'gateway\fellowmage-gateway.jar') + ';' + (Join-Path $Root 'gateway\lib\*')
+        # as bibliotecas do XMage vem do servidor instalado: o gateway se apresenta sempre com a mesma
+        # versao do servidor (senao: "Wrong client version")
+        $cp = (Join-Path $Root 'gateway\fellowmage-gateway.jar') + ';' + (Join-Path $Root 'gateway\lib\*') + ';' + (Join-Path $Root 'server\lib\*')
         Start-Process -FilePath $Java -WorkingDirectory $Root -WindowStyle Hidden `
             -ArgumentList ($common + @('-Xmx768m', '-cp', "`"$cp`"", 'fellowmage.gateway.GatewayMain',
                 '--port=8090', '--samples=sample-decks', '--decks=decks', '--cards-db=server\db\cards.h2',

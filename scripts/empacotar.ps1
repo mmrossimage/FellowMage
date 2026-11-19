@@ -1,18 +1,19 @@
 # Gera o pacote para Windows que roda sem instalar nada
-# (Java embutido via jlink, servidor XMage compilado, gateway, cliente web compilado, decks de exemplo):
+# (Java embutido via jlink, servidor XMage oficial de xmage.today, gateway, cliente web compilado, decks de exemplo):
 #   dist\FellowMage-completo.zip     instalacao completa (mande este para quem ainda nao tem o jogo)
 #   dist\FellowMage-atualizacao.zip  so cliente web, gateway e scripts (o que muda a cada versao)
 #   dist\versao.json                 versao publicada, lida pelo atualizador do pacote
 # Com -Publicar, cria um release no GitHub com os tres arquivos; o pacote instalado procura
-# atualizacoes nele ao iniciar (packaging\app\scripts\atualizacao.ps1).
+# atualizacoes nele ao iniciar (packaging\app\scripts\atualizacao.ps1); o servidor XMage ele atualiza
+# pelo site oficial, dentro da versao de mage.version do gateway (xmageCompativel).
 # Pre-requisito: mage-src compilado (mvn install) — ver README. Para publicar: gh autenticado (gh auth login).
-param([switch]$PularServidor, [switch]$Publicar)
+param([switch]$Publicar)
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot\dev-env.ps1"
 
-# Aumente quando mudar algo do runtime ou do servidor que nao muda a revisao do XMage nem a do Java
-# (modulos do jlink, ajustes no config.xml...): forca quem atualizar a baixar o pacote completo.
-$RevisaoBase = 1
+# Aumente quando mudar algo do runtime que nao muda a versao do Java (modulos do jlink...):
+# forca quem atualizar a baixar o pacote completo.
+$RevisaoBase = 2
 $Modulos = 'java.se,jdk.httpserver,jdk.unsupported,jdk.crypto.ec,jdk.zipfs,jdk.charsets,jdk.localedata,jdk.management'
 
 $Dist = Join-Path $Root 'dist'
@@ -42,7 +43,8 @@ if ($Publicar) {
 $origin = (git -C $Root remote get-url origin).Trim()
 if ($origin -notmatch 'github\.com[:/]([^/]+/[^/]+?)(\.git)?$') { throw "Remote origin nao e do GitHub: $origin" }
 $Repo = $Matches[1]
-$xmage = (git -C (Join-Path $Root 'mage-src') rev-parse HEAD).Trim(); Check 'git rev-parse (mage-src)'
+# versao do XMage com que o gateway compila; o pacote so aceita servidores dessa versao
+$XmageCompativel = ([xml](Get-Content (Join-Path $Root 'gateway\pom.xml') -Raw -Encoding UTF8)).project.properties.'mage.version'
 $javaRelease = Get-Content (Join-Path $env:JAVA_HOME 'release') -Raw
 if ($javaRelease -notmatch 'JAVA_RUNTIME_VERSION="([^"]+)"') { throw "Nao achei a versao do Java em $env:JAVA_HOME\release" }
 $java = $Matches[1]
@@ -51,8 +53,9 @@ $info = [ordered]@{
     versao = $versao
     commit = $commit
     repo   = $Repo
-    # pacote completo necessario quando muda: XMage, Java ou $RevisaoBase
-    base   = "xmage-$($xmage.Substring(0, 8))+java-$java+r$RevisaoBase"
+    xmageCompativel = $XmageCompativel
+    # pacote completo necessario quando muda: Java ou $RevisaoBase
+    base   = "java-$java+r$RevisaoBase"
 }
 Write-Host "Versao $versao (commit $($commit.Substring(0, 8))$(if ($modificado) { ', com alteracoes sem commit' }))"
 
@@ -68,29 +71,35 @@ Copy-Item -Recurse (Join-Path $Root 'web\dist') (Join-Path $Out 'web')
 
 Step 'Gateway (jar + dependencias)'
 Push-Location (Join-Path $Root 'gateway')
-# clean: copy-dependencies nao apaga jars antigos de target/lib; com duas versoes do XMage no
-# classpath, o gateway pode se apresentar ao servidor com a versao velha ("Wrong client version")
-mvn -B -q clean package dependency:copy-dependencies "-DoutputDirectory=target/lib" -DincludeScope=runtime | Out-Host; Check 'mvn package (gateway)'
+# so as dependencias proprias do gateway (Java-WebSocket): o XMage e o resto vem de server\lib no
+# classpath (iniciar.ps1), para o gateway ter sempre a mesma versao do servidor instalado.
+# clean: copy-dependencies nao apaga jars antigos de target/lib
+mvn -B -q clean package dependency:copy-dependencies "-DoutputDirectory=target/lib" -DincludeScope=runtime `
+    '-DexcludeTransitive=true' '-DexcludeGroupIds=org.mage' | Out-Host; Check 'mvn package (gateway)'
 Pop-Location
-$mageJars = Get-ChildItem (Join-Path $Root 'gateway\target\lib') -Filter 'mage-*.jar' |
-    Where-Object { $_.Name -match '^mage(-common)?-\d' } | ForEach-Object { $_.Name -replace '^mage(-common)?-|\.jar$', '' } | Sort-Object -Unique
-if (@($mageJars).Count -ne 1) { throw "gateway\target\lib tem mais de uma versao do XMage: $($mageJars -join ', ')" }
+if (Get-ChildItem (Join-Path $Root 'gateway\target\lib') -Filter 'mage*.jar') { throw 'gateway\target\lib nao deveria ter jars do XMage' }
 New-Item -ItemType Directory -Force (Join-Path $Out 'gateway') | Out-Null
 Copy-Item (Join-Path $Root 'gateway\target\fellowmage-gateway-0.1.0.jar') (Join-Path $Out 'gateway\fellowmage-gateway.jar')
 Copy-Item -Recurse (Join-Path $Root 'gateway\target\lib') (Join-Path $Out 'gateway\lib')
 
-Step 'Servidor XMage (assembly)'
-$serverZip = Join-Path $Root 'mage-src\Mage.Server\target\mage-server.zip'
-if (-not $PularServidor -or -not (Test-Path $serverZip)) {
-    Push-Location (Join-Path $Root 'mage-src\Mage.Server')
-    mvn -B -q package assembly:single -DskipTests | Out-Host; Check 'mvn assembly (servidor)'
-    Pop-Location
+Step 'Servidor XMage oficial (xmage.today)'
+# mesmo codigo que o pacote usa para se atualizar (packaging\app\scripts\xmage.ps1)
+. (Join-Path $Root 'packaging\app\scripts\xmage.ps1')
+$oficial = Get-XmageOficial 30000
+if ($oficial.Numero -ne $XmageCompativel) {
+    throw "O XMage oficial e o $($oficial.Numero), mas o gateway compila com o $XmageCompativel. Rode ""Atualizar FellowMage.cmd"" e tente de novo."
 }
-Expand-Archive $serverZip (Join-Path $Out 'server')
-# só local: escutar em 127.0.0.1 (evita o aviso do firewall do Windows)
-$cfg = Join-Path $Out 'server\config\config.xml'
-(Get-Content $cfg -Raw -Encoding UTF8) -replace 'serverAddress="0\.0\.0\.0"', 'serverAddress="127.0.0.1"' | Set-Content $cfg -Encoding UTF8 -NoNewline
-Remove-Item (Join-Path $Out 'server\*.bat'), (Join-Path $Out 'server\*.sh'), (Join-Path $Out 'server\*.command') -ErrorAction SilentlyContinue
+# cache por versao publicada: so baixa (~95 MB) quando sai um build novo
+$cacheRoot = Join-Path $Dist 'xmage-cache'
+$cache = Join-Path $cacheRoot ($oficial.Label -replace '[^\w.-]', '_')
+if (-not (Test-Path (Join-Path $cache 'server\xmage-versao.txt'))) {
+    if (Test-Path $cacheRoot) { Remove-Item -Recurse -Force $cacheRoot }
+    $z = Open-XmageZip $oficial.Url (Join-Path $Dist 'xmage-download')
+    try { Expand-XmageServidor $z.Zip $cache $oficial.Label $z.Stream } finally { Close-XmageZip $z }
+}
+Write-Host "  $($oficial.Label)"
+Copy-Item -Recurse (Join-Path $cache 'server') (Join-Path $Out 'server')
+Copy-Item -Recurse (Join-Path $cache 'sample-decks') (Join-Path $Out 'sample-decks')
 
 Step 'Java embutido (jlink)'
 & "$env:JAVA_HOME\bin\jlink.exe" --add-modules $Modulos `
@@ -98,7 +107,6 @@ Step 'Java embutido (jlink)'
 Check 'jlink'
 
 Step 'Decks de exemplo, atalhos e LEIA-ME'
-Copy-Item -Recurse (Join-Path $Root $SampleDecks) (Join-Path $Out 'sample-decks')
 New-Item -ItemType Directory -Force (Join-Path $Out 'decks') | Out-Null
 Copy-Item -Recurse (Join-Path $Root 'packaging\app\*') $Out
 Copy-Item (Join-Path $Root 'mage-src\LICENSE.txt') (Join-Path $Out 'LICENSE-XMage.txt')
@@ -120,7 +128,11 @@ try {
     $texto = if ($resp.Content -is [byte[]]) { $Utf8.GetString($resp.Content) } else { $resp.Content }
     $anterior = $texto.TrimStart([char]0xFEFF) | ConvertFrom-Json
     if ($anterior.commit) {
-        $novidades = @(git -C $Root log --no-merges --format=%s "$($anterior.commit)..HEAD" 2>$null | Select-Object -First 15)
+        # o git escreve UTF-8; sem isto o PowerShell 5.1 le como ANSI e estraga os acentos
+        $encAnterior = [Console]::OutputEncoding
+        [Console]::OutputEncoding = $Utf8
+        try { $novidades = @(git -C $Root log --no-merges --format=%s "$($anterior.commit)..HEAD" 2>$null | Select-Object -First 15) }
+        finally { [Console]::OutputEncoding = $encAnterior }
     }
 } catch {
     Write-Host '  (nenhum release anterior encontrado)' -ForegroundColor DarkGray

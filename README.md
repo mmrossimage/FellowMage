@@ -87,13 +87,13 @@ Na primeira vez em que o servidor local é iniciado, ele pode levar mais tempo p
 
 ### Pacote Windows
 
-O [script de empacotamento](scripts/empacotar.ps1) compila o cliente e o gateway e reúne o servidor XMage, um runtime Java embutido, decks de exemplo e os atalhos de inicialização. Ele depende dos arquivos locais do XMage já preparados. As instruções para quem recebe o pacote estão em [LEIA-ME.txt](packaging/app/LEIA-ME.txt).
+O [script de empacotamento](scripts/empacotar.ps1) compila o cliente e o gateway e reúne o servidor XMage oficial (baixado de `xmage.today`), um runtime Java embutido, decks de exemplo e os atalhos de inicialização. Ele depende dos arquivos locais do XMage já preparados, para compilar o gateway, e só gera o pacote se a versão oficial do XMage for a mesma de `mage.version` no [`pom.xml` do gateway](gateway/pom.xml). As instruções para quem recebe o pacote estão em [LEIA-ME.txt](packaging/app/LEIA-ME.txt).
 
 O script gera três arquivos em `dist/`:
 
 - `FellowMage-completo.zip` — instalação completa, para quem ainda não tem o jogo;
 - `FellowMage-atualizacao.zip` — só o cliente web, o gateway e os scripts;
-- `versao.json` — versão, commit e a "base" do pacote (revisões do XMage e do Java).
+- `versao.json` — versão, commit, a "base" do pacote (versão do Java embutido) e `xmageCompativel`, a versão do XMage com que o gateway foi compilado.
 
 Para publicar uma versão, faça o commit e o push e rode:
 
@@ -101,7 +101,9 @@ Para publicar uma versão, faça o commit e o push e rode:
 scripts\empacotar.ps1 -Publicar
 ```
 
-Isso cria um release no GitHub com os três arquivos (precisa do `gh` autenticado com `gh auth login`). Ao abrir, o pacote instalado lê o `versao.json` do último release e, se houver versão nova, pergunta se deve atualizar. O [atualizador](packaging/app/scripts/atualizacao.ps1) baixa o zip de atualização ou, quando a base mudou, o completo. Ele troca as pastas do programa e preserva `decks/`, `logs/` e o banco de cartas (`server/db`). Se algo falhar, volta para a versão anterior. Ao mudar módulos do `jlink` ou a configuração do servidor sem mudar o XMage nem o Java, aumente `$RevisaoBase` em `empacotar.ps1` para forçar o pacote completo.
+Isso cria um release no GitHub com os três arquivos (precisa do `gh` autenticado com `gh auth login`). Ao abrir, o pacote instalado lê o `versao.json` do último release e, se houver versão nova, pergunta se deve atualizar. O [atualizador](packaging/app/scripts/atualizacao.ps1) baixa o zip de atualização ou, quando a base mudou, o completo. Ele troca as pastas do programa e preserva `decks/`, `logs/` e o banco de cartas (`server/db`). Se algo falhar, volta para a versão anterior. Ao mudar módulos do `jlink` sem mudar a versão do Java, aumente `$RevisaoBase` em `empacotar.ps1` para forçar o pacote completo.
+
+O servidor XMage do pacote se atualiza pelo site oficial, com o [`xmage.ps1`](packaging/app/scripts/xmage.ps1). Ao abrir, o pacote lê `xmage.today/config.json` e, se houver build novo da versão `xmageCompativel`, oferece baixar. Quando o site aceita HTTP Range, ele baixa só o servidor e os decks de exemplo (cerca de 90 MB dos 250 MB do zip oficial). Builds de outra versão (por exemplo 1.4.64) ficam esperando um release do FellowMage compatível, porque o gateway lê estruturas do XMage que mudam entre versões. O gateway do pacote não leva bibliotecas do XMage: usa as de `server/lib`, e por isso sempre se apresenta ao servidor com a mesma versão.
 
 <a id="arquitetura"></a>
 
