@@ -42,8 +42,18 @@ function Update-FellowMage {
     $localFile = Join-Path $Root 'versao.json'
     if (-not (Test-Path $localFile)) { return $false }
     $local = [IO.File]::ReadAllText($localFile, $Utf8).TrimStart([char]0xFEFF) | ConvertFrom-Json
-    $baseUrl = if ($env:FELLOWMAGE_ATUALIZACAO_URL) { $env:FELLOWMAGE_ATUALIZACAO_URL.TrimEnd('/') } `
-               else { "https://github.com/$($local.repo)/releases/latest/download" }
+    if ($env:FELLOWMAGE_ATUALIZACAO_URL) {
+        $baseUrl = $env:FELLOWMAGE_ATUALIZACAO_URL.TrimEnd('/')
+    } else {
+        # a API diz o ultimo release na hora; o atalho releases/latest/download pode levar minutos
+        # para apontar para um release recem-publicado
+        try {
+            $tag = ((Read-Url "https://api.github.com/repos/$($local.repo)/releases/latest" 5000) | ConvertFrom-Json).tag_name
+            $baseUrl = "https://github.com/$($local.repo)/releases/download/$tag"
+        } catch {
+            $baseUrl = "https://github.com/$($local.repo)/releases/latest/download"
+        }
+    }
 
     # sem internet ou sem release publicado: segue sem avisar
     try {
