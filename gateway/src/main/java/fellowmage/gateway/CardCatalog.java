@@ -283,7 +283,13 @@ public final class CardCatalog {
             e = byFrontFace.get(key);
         }
         if (e == null && key.contains("/") && !key.contains(" // ")) {
-            e = byName.get(key.replaceAll("\\s*/+\\s*", " // "));
+            key = key.replaceAll("\\s*/+\\s*", " // ");
+            e = byName.get(key);
+        }
+        if (e == null && key.contains(" // ")) {
+            // só as cartas divididas (Fire // Ice) ficam no banco com o nome completo; MDFC, transformáveis,
+            // aventuras etc. ficam com o nome da face da frente (CardRepository.findCards faz o mesmo)
+            e = byName.get(key.substring(0, key.indexOf(" // ")).trim());
         }
         return e;
     }

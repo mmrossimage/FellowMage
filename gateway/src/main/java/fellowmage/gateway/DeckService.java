@@ -473,7 +473,8 @@ public final class DeckService {
             CardCatalog.Entry e = null;
             if (set != null && num != null) {
                 CardCatalog.Entry p = catalog.findPrinting(set, num);
-                if (p != null && (p.name.equalsIgnoreCase(name) || p.name.toLowerCase(Locale.ROOT).startsWith(name.toLowerCase(Locale.ROOT) + " //"))) {
+                // a impressão vale se for a mesma carta pelo nome (inclui "Frente // Verso" de MDFC e só a frente de divididas)
+                if (p != null && p == catalog.find(name)) {
                     e = p;
                 } else {
                     set = null;
