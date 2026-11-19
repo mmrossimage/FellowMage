@@ -1,6 +1,6 @@
 # FellowMage (pacote): inicia o gateway com o Java embutido e abre o navegador.
 # O servidor XMage local só sobe quando o jogador escolhe jogar contra a IA (scripts\servidor-local.ps1).
-param([switch]$SemNavegador)
+param([switch]$SemNavegador, [switch]$SemVerificar)
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $PSScriptRoot
 $Java = Join-Path $Root 'runtime\bin\java.exe'
@@ -37,6 +37,18 @@ Write-Host ''
 Write-Host '  FellowMage' -ForegroundColor Yellow
 Write-Host ''
 try {
+    # atualizacao so com o jogo fechado (os arquivos em uso nao podem ser trocados)
+    if (-not $SemVerificar -and -not (Test-Port 8090)) {
+        . (Join-Path $PSScriptRoot 'atualizacao.ps1')
+        if (Update-FellowMage) {
+            # reinicia com os scripts da versao nova
+            $novoArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $Root 'scripts\iniciar.ps1'), '-SemVerificar')
+            if ($SemNavegador) { $novoArgs += '-SemNavegador' }
+            & powershell.exe @novoArgs
+            return
+        }
+    }
+
     $common = @('--add-opens=java.base/java.io=ALL-UNNAMED')
 
     if (Test-Port 8090) {

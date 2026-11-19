@@ -89,6 +89,20 @@ Na primeira vez em que o servidor local é iniciado, ele pode levar mais tempo p
 
 O [script de empacotamento](scripts/empacotar.ps1) compila o cliente e o gateway e reúne o servidor XMage, um runtime Java embutido, decks de exemplo e os atalhos de inicialização. Ele depende dos arquivos locais do XMage já preparados. As instruções para quem recebe o pacote estão em [LEIA-ME.txt](packaging/app/LEIA-ME.txt).
 
+O script gera três arquivos em `dist/`:
+
+- `FellowMage-completo.zip` — instalação completa, para quem ainda não tem o jogo;
+- `FellowMage-atualizacao.zip` — só o cliente web, o gateway e os scripts;
+- `versao.json` — versão, commit e a "base" do pacote (revisões do XMage e do Java).
+
+Para publicar uma versão, faça o commit e o push e rode:
+
+```powershell
+scripts\empacotar.ps1 -Publicar
+```
+
+Isso cria um release no GitHub com os três arquivos (precisa do `gh` autenticado com `gh auth login`). Ao abrir, o pacote instalado lê o `versao.json` do último release e, se houver versão nova, pergunta se deve atualizar. O [atualizador](packaging/app/scripts/atualizacao.ps1) baixa o zip de atualização ou, quando a base mudou, o completo. Ele troca as pastas do programa e preserva `decks/`, `logs/` e o banco de cartas (`server/db`). Se algo falhar, volta para a versão anterior. Ao mudar módulos do `jlink` ou a configuração do servidor sem mudar o XMage nem o Java, aumente `$RevisaoBase` em `empacotar.ps1` para forçar o pacote completo.
+
 <a id="arquitetura"></a>
 
 ## 🏛️ Arquitetura

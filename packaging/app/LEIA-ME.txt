@@ -17,6 +17,11 @@ REQUISITOS
 - Internet (as imagens das cartas vem do Scryfall).
 - Nao precisa instalar Java nem nada: ja vem tudo na pasta.
 
+ATUALIZACOES
+- Ao abrir "Iniciar FellowMage", o jogo procura uma versao nova (precisa de internet). Se houver,
+  pergunta se deve atualizar: responda S e espere o download. Seus decks continuam onde estao.
+- Sem internet, o jogo abre normalmente com a versao que voce tem.
+
 SE O WINDOWS RECLAMAR
 - "O Windows protegeu o computador" (SmartScreen): clique em "Mais informacoes" > "Executar assim mesmo".
   Acontece porque os atalhos nao sao assinados digitalmente.
