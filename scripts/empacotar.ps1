@@ -136,8 +136,11 @@ if ($Publicar) {
     Step "Publicando o release v$versao em $Repo"
     $notas = if ($novidades) { ($novidades | ForEach-Object { "- $_" }) -join "`n" } else { 'Primeira versao com atualizacao automatica.' }
     $notas += "`n`nPara instalar: baixe FellowMage-completo.zip, descompacte e abra ""Iniciar FellowMage"". Quem ja tem o jogo recebe a atualizacao ao abrir."
+    # notas por arquivo: o PowerShell 5.1 quebra argumentos com aspas ao chamar programas externos
+    $notasFile = Join-Path $Dist 'notas.md'
+    [IO.File]::WriteAllText($notasFile, $notas, $Utf8)
     gh release create "v$versao" $ZipCompleto $ZipAtualizacao $VersaoDist --repo $Repo --target $commit `
-        --title "FellowMage $versao" --notes $notas --latest
+        --title "FellowMage $versao" --notes-file $notasFile --latest
     Check 'gh release create'
     Write-Host "Publicado: https://github.com/$Repo/releases/tag/v$versao" -ForegroundColor Green
 }
