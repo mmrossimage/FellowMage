@@ -1,10 +1,12 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useState } from 'react';
-import { useStore } from '../store';
+import { CardArt } from '../components/CardArt';
+import { useStore, type LogLine } from '../store';
 import type { Card, Prompt } from '../types';
 import { promptHtml } from '../i18n';
-import { cx, rulesToHtml, sanitizeHtml } from '../util';
+import { cx, rulesToHtml, sanitizeHtml, stripHtml } from '../util';
 import { CardFace } from './CardFace';
+import { findCard } from './CardPreview';
 import { HIGHLIGHT_CLASS, isPromptTarget, optionIds, promptListsTargets } from './interaction';
 
 /** Diálogos modais para pedidos que não são "clique no tabuleiro". */
@@ -47,7 +49,7 @@ export function PromptDialogs() {
         exit={{ opacity: 0 }}
         className="fixed inset-0 z-50 flex items-center justify-center gap-6 bg-black/60 p-6 backdrop-blur-sm"
       >
-        {prompt.kind !== 'ability' && <PromptSource />}
+        {prompt.kind !== 'ability' && <PromptSource prompt={prompt} />}
         <motion.div
           initial={{ scale: 0.92, y: 12 }}
           animate={{ scale: 1, y: 0 }}
@@ -65,29 +67,78 @@ export function PromptDialogs() {
  * Mas quase toda escolha acontece enquanto algo resolve ou é conjurado, e o objeto fica no topo da pilha até
  * terminar (GameImpl.resolve só o remove depois): mostramos esse objeto ao lado do diálogo, para dar contexto.
  */
-function PromptSource() {
+function PromptSource({ prompt }: { prompt: Prompt }) {
   const top = useStore((s) => s.game?.stack[0]); // XMage envia a pilha do topo para o fundo
+  const game = useStore((s) => s.game);
+  const log = useStore((s) => s.log);
+  const mark = useStore((s) => s.stackLogMark);
   const setHovered = useStore((s) => s.setHovered);
-  if (!top) return null;
-  const name = top.ability ? top.sourceName ?? top.name : top.name;
+  const setHoveredRef = useStore((s) => s.setHoveredRef);
+  const name = top ? (top.ability ? top.sourceName ?? top.name : top.name) : undefined;
+  const related = prompt.kind === 'choice' ? choiceSourceFromLog(log, mark, name) : undefined;
+  if (!top && !related) return null;
+  const relatedCard = related && findCard(related.id, game, prompt);
   return (
     <motion.aside
       initial={{ opacity: 0, x: -24 }}
       animate={{ opacity: 1, x: 0 }}
-      onMouseEnter={() => setHovered(top.id)}
-      onMouseLeave={() => setHovered(undefined)}
       className="hidden w-60 shrink-0 flex-col gap-2 lg:flex"
     >
-      <div className="text-[11px] uppercase tracking-[0.2em] text-white/50">Topo da pilha</div>
-      <CardFace card={top} overlays={false} className="w-full shadow-target" />
-      <div className="rounded-xl border border-white/10 bg-ink-900/95 p-3 text-xs shadow-panel">
-        <div className="font-semibold text-white">{name}</div>
-        {top.ability && top.rules[0] && (
-          <div className="mt-1 text-white/70" dangerouslySetInnerHTML={{ __html: rulesToHtml(top.rules[0], name) }} />
-        )}
-      </div>
+      {related ? (
+        <div
+          className="flex flex-col gap-2"
+          onMouseEnter={() => (relatedCard ? setHovered(relatedCard.id) : setHoveredRef(related))}
+          onMouseLeave={() => (relatedCard ? setHovered(undefined) : setHoveredRef(undefined))}
+        >
+          <div className="text-[11px] uppercase tracking-[0.2em] text-white/50">Escolha pedida por</div>
+          {relatedCard ? (
+            <CardFace card={relatedCard} overlays={false} className="w-full shadow-target" />
+          ) : (
+            <CardArt card={{ name: related.name }} size="large" className="w-full shadow-target" />
+          )}
+        </div>
+      ) : (
+        top && (
+          <div className="flex flex-col gap-2" onMouseEnter={() => setHovered(top.id)} onMouseLeave={() => setHovered(undefined)}>
+            <div className="text-[11px] uppercase tracking-[0.2em] text-white/50">Topo da pilha</div>
+            <CardFace card={top} overlays={false} className="w-full shadow-target" />
+          </div>
+        )
+      )}
+      {top && name && (
+        <div
+          className="rounded-xl border border-white/10 bg-ink-900/95 p-3 text-xs shadow-panel"
+          onMouseEnter={() => setHovered(top.id)}
+          onMouseLeave={() => setHovered(undefined)}
+        >
+          {related && <div className="mb-1 text-[10px] uppercase tracking-[0.2em] text-white/40">Durante</div>}
+          <div className="font-semibold text-white">{name}</div>
+          {top.ability && top.rules[0] && (
+            <div className="mt-1 text-white/70" dangerouslySetInnerHTML={{ __html: rulesToHtml(top.rules[0], name) }} />
+          )}
+        </div>
+      )}
     </motion.aside>
   );
+}
+
+/**
+ * Efeitos "each player chooses" (ex.: Archangel of Strife) perguntam um jogador por vez, a partir do controlador,
+ * e o XMage registra cada resposta como "<carta>: <jogador> has chosen <x>" com o object_id da carta. Quando a
+ * carta entra por outro efeito (gatilho da Kaalia, reanimação...), ela não está em nenhuma zona visível durante a
+ * escolha e o "puts ... onto the Battlefield" só vem depois: essas linhas são a única pista de quem pergunta.
+ */
+function choiceSourceFromLog(log: LogLine[], mark: number, stackName: string | undefined) {
+  for (let i = log.length - 1; i >= 0 && log[i].id > mark; i--) {
+    const line = log[i];
+    if (line.kind !== 'game' || !/\bcho(?:se|sen)\b/i.test(stripHtml(line.html))) continue;
+    const doc = new DOMParser().parseFromString(`<div>${sanitizeHtml(line.html)}</div>`, 'text/html');
+    for (const el of Array.from(doc.querySelectorAll<HTMLElement>('[data-obj]'))) {
+      const name = (el.dataset.card ?? '').replace(/\s*\[\w+\]$/, '').trim();
+      if (name && name !== stackName) return { id: el.dataset.obj!, name };
+    }
+  }
+  return undefined;
 }
 
 function Title({ html, sub }: { html?: string; sub?: string }) {

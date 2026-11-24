@@ -42,6 +42,8 @@ type State = {
   /** quando o servidor pede resposta e ainda não respondemos */
   waiting: boolean;
   log: LogLine[];
+  /** id da última linha do log antes de o topo da pilha mudar (Dialogs: cartas citadas desde então) */
+  stackLogMark: number;
   toast?: { text: string; tone: 'error' | 'info' };
   /** matchOver = false: fim de um jogo numa partida melhor de N (o próximo jogo vem a seguir) */
   result?: { won: boolean; title: string; info: string; extra?: string; matchOver: boolean };
@@ -255,7 +257,10 @@ export const useStore = create<State>((set, get) => {
         if (m.gameId && current && m.gameId !== current && !m.method.startsWith('REPLAY_')) break;
         // GAME_UPDATE sem prompt não altera o pedido pendente
         const patch: Partial<State> = {};
-        if (m.game) patch.game = m.game;
+        if (m.game) {
+          patch.game = m.game;
+          if (m.game.stack[0]?.id !== get().game?.stack[0]?.id) patch.stackLogMark = logSeq;
+        }
         if (m.prompt) {
           if (m.method === 'GAME_INFORM_PERSONAL') {
             // No XMage, este aviso abre um diálogo separado e não cancela a decisão atual.
@@ -381,6 +386,7 @@ export const useStore = create<State>((set, get) => {
     decks: [],
     waiting: false,
     log: [],
+    stackLogMark: 0,
     view: 'home',
     userDecks: [],
     tables: [],
