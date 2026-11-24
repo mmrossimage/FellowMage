@@ -237,13 +237,33 @@ function AmountDialog({ prompt }: { prompt: Prompt }) {
   const respondInteger = useStore((s) => s.respondInteger);
   const min = prompt.min ?? 0;
   const max = prompt.max ?? 0;
-  const [value, setValue] = useState(min);
+  // texto livre enquanto digita (permite apagar tudo); o valor enviado é sempre limitado a [min, max].
+  // O X de um feitiço chega com máximo enorme (Integer.MAX_VALUE), então um slider não serve.
+  const [text, setText] = useState(String(min));
+  const parsed = Number.parseInt(text, 10);
+  const value = Number.isNaN(parsed) ? min : Math.min(max, Math.max(min, parsed));
+  const step = (d: number) => setText(String(Math.min(max, Math.max(min, value + d))));
+  const stepBtn = 'flex h-12 w-12 items-center justify-center rounded-xl bg-white/10 text-2xl font-semibold text-white ring-1 ring-white/15 transition hover:bg-white/20 disabled:opacity-30';
   return (
     <>
-      <Title html={prompt.message} />
-      <div className="flex items-center gap-4">
-        <input type="range" min={min} max={max} value={value} onChange={(e) => setValue(Number(e.target.value))} className="flex-1 accent-amber-400" />
-        <span className="w-12 text-center font-display text-3xl text-white">{value}</span>
+      <Title html={prompt.message} sub={max < 1_000_000 ? `Entre ${min} e ${max}` : `Mínimo ${min}`} />
+      <div className="flex items-center justify-center gap-3">
+        <button className={stepBtn} disabled={value <= min} onClick={() => step(-1)} aria-label="Diminuir">−</button>
+        <input
+          autoFocus
+          inputMode="numeric"
+          value={text}
+          onChange={(e) => setText(e.target.value.replace(/[^\d-]/g, ''))}
+          onBlur={() => setText(String(value))}
+          onFocus={(e) => e.target.select()}
+          onKeyDown={(e) => {
+            if (e.key === 'ArrowUp') { e.preventDefault(); step(1); }
+            else if (e.key === 'ArrowDown') { e.preventDefault(); step(-1); }
+            else if (e.key === 'Enter') respondInteger(value);
+          }}
+          className="h-12 w-28 rounded-xl bg-black/40 text-center font-display text-3xl text-white outline-none ring-1 ring-white/10 focus:ring-arcane-400"
+        />
+        <button className={stepBtn} disabled={value >= max} onClick={() => step(1)} aria-label="Aumentar">+</button>
       </div>
       <div className="mt-5 flex justify-end">
         <Btn primary onClick={() => respondInteger(value)}>Confirmar</Btn>
