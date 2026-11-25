@@ -70,6 +70,20 @@ public final class CardCatalog {
     private volatile List<Entry> sorted = Collections.emptyList();
     private volatile String status = "não carregado";
     private volatile List<String[]> boosterSets = Collections.emptyList(); // {código, nome}
+    /** "set:num" -> nome do verso (minúsculo) das cartas de dupla face; estático porque o ViewMapper é estático. */
+    private static volatile Map<String, String> backFaces = Collections.emptyMap();
+
+    /**
+     * A carta com este set/número tem dupla face e o nome é o do verso? O XMage manda o verso de uma MDFC
+     * (terreno jogado pelo verso) com o set/número da frente, e o Scryfall devolveria a imagem da frente.
+     */
+    public static boolean isBackFace(String set, String num, String name) {
+        if (set == null || num == null || name == null) {
+            return false;
+        }
+        String back = backFaces.get((set + ":" + num).toLowerCase(Locale.ROOT));
+        return back != null && back.equals(name.toLowerCase(Locale.ROOT));
+    }
 
     /** Coleções que têm booster no XMage (para draft e selado). */
     public List<String[]> getBoosterSets() {
@@ -159,6 +173,26 @@ public final class CardCatalog {
             System.err.println("Coleções com booster indisponíveis: " + ex.getMessage());
         }
         boosterSets = sets;
+
+        // versos das cartas de dupla face (transformáveis e MDFC), para a imagem certa na mesa
+        Map<String, String> backs = new HashMap<>();
+        try (Connection c = DriverManager.getConnection(url, "", "");
+             Statement st = c.createStatement();
+             ResultSet rs = st.executeQuery("SELECT c.SETCODE, c.CARDNUMBER, c.SECONDSIDENAME, c.DOUBLEFACEDSECONDSIDENAME FROM CARD c "
+                     + "WHERE c.NIGHTCARD = FALSE AND (c.SECONDSIDENAME IS NOT NULL OR c.DOUBLEFACEDSECONDSIDENAME IS NOT NULL)")) {
+            while (rs.next()) {
+                String back = rs.getString("DOUBLEFACEDSECONDSIDENAME");
+                if (back == null || back.isEmpty()) {
+                    back = rs.getString("SECONDSIDENAME");
+                }
+                if (back != null && !back.isEmpty()) {
+                    backs.put((rs.getString("SETCODE") + ":" + rs.getString("CARDNUMBER")).toLowerCase(Locale.ROOT), back.toLowerCase(Locale.ROOT));
+                }
+            }
+        } catch (Exception ex) {
+            System.err.println("Versos de dupla face indisponíveis: " + ex.getMessage());
+        }
+        backFaces = backs;
 
         Map<String, Entry> front = new HashMap<>();
         Map<String, Entry> printing = new HashMap<>();

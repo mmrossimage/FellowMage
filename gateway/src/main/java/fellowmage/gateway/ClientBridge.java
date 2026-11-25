@@ -455,9 +455,12 @@ public final class ClientBridge implements MageClient {
             promptAnswered = true;
         }
         switch (type) {
-            case "sendUUID":
-                session.sendPlayerUUID(gameId, UUID.fromString(str(cmd, "id")));
+            case "sendUUID": {
+                // id nulo: só pede ao servidor para refazer a pergunta (GamePanel faz isso após TRIGGER_AUTO_ORDER_*_LAST)
+                String uuid = str(cmd, "id");
+                session.sendPlayerUUID(gameId, uuid == null ? null : UUID.fromString(uuid));
                 break;
+            }
             case "sendBoolean":
                 session.sendPlayerBoolean(gameId, cmd.get("value").getAsBoolean());
                 break;
@@ -608,6 +611,8 @@ public final class ClientBridge implements MageClient {
         options.setAttackOption(MultiplayerAttackOption.MULTIPLE);
         options.setRange(RangeOfInfluence.ALL);
         options.setWinsNeeded(1);
+        // voltar turnos (menu "Rollback"): o MatchOptions começa desligado; o NewTableDialog oficial liga por padrão
+        options.setRollbackTurnsAllowed(true);
         // mulligans grátis: o *Match de cada tipo de jogo passa isso ao Mulligan (getMulligan(getFreeMulligans()));
         // 0 a 5, o mesmo limite do cliente oficial (CustomOptionsDialog)
         options.setFreeMulligans(Math.max(0, Math.min(5, freeMulligans)));
@@ -1684,7 +1689,16 @@ public final class ClientBridge implements MageClient {
             return null;
         }
         com.google.gson.JsonPrimitive p = cmd.getAsJsonPrimitive("data");
-        return p.isNumber() ? (Object) p.getAsInt() : UUID.fromString(p.getAsString());
+        if (p.isNumber()) {
+            return p.getAsInt();
+        }
+        // texto da regra em TRIGGER_AUTO_ORDER_NAME_FIRST/LAST; ids nos demais casos
+        String s = p.getAsString();
+        try {
+            return UUID.fromString(s);
+        } catch (IllegalArgumentException e) {
+            return s;
+        }
     }
 
     private static String str(JsonObject o, String key) {

@@ -13,8 +13,8 @@ O FellowMage oferece uma interface no navegador para jogar em um servidor [XMage
 ### ✨ Funcionalidades
 
 - 🎮 **Partidas** — Commander com um jogador humano e até três IAs, além de duelo 1×1.
-- 🃏 **Mesa de jogo** — mão, campo, pilha, alvos, zonas, histórico, reserva de mana e diálogos de decisão.
-- ⏱️ **Prioridade** — trilha das fases do turno, atalhos para passar prioridade e paradas configuráveis.
+- 🃏 **Mesa de jogo** — mão, campo organizado por tipo (criaturas, depois artefatos/encantamentos, depois terrenos), tokens iguais empilhados, pilha, alvos, zonas, histórico, reserva de mana e diálogos de decisão.
+- ⏱️ **Prioridade** — trilha das fases do turno, botões e teclas do cliente oficial (F2–F12, Alt+1), paradas configuráveis, ordem automática de gatilhos e voltar turnos (clique direito na mesa).
 - 👑 **Commander** — zona de comando, imposto, dano de comandante recebido e ordem de turno.
 - 🔁 **Reconexão** — o gateway mantém a sessão por até dois minutos após a queda do navegador.
 - 📚 **Decks** — editor com busca no catálogo do XMage, validação de Commander, escolha de arte, importação e exportação de listas; os decks do usuário são salvos como `.dck`.

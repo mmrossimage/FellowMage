@@ -9,7 +9,7 @@ import { Arrows } from './Arrows';
 import { Battlefield } from './Battlefield';
 import { CardPreview } from './CardPreview';
 import { ExileZones } from './ExileZones';
-import { GameMenu, useSkipHotkeys } from './GameMenu';
+import { GameMenu, TableContextMenu, useSkipHotkeys } from './GameMenu';
 import { TableBackground } from './TableBackground';
 import { VisibleHands } from './VisibleHands';
 import { seatsFromMe } from './commander';
@@ -72,6 +72,7 @@ export function GameBoard() {
           </div>
         </header>
 
+        <TableContextMenu>
         <main
           className={cx(
             'relative grid min-h-0 overflow-clip',
@@ -116,6 +117,7 @@ export function GameBoard() {
             <div className="relative z-30">{replay ? <ReplayBar /> : <ActionBar />}</div>
           </div>
         </main>
+        </TableContextMenu>
 
         <aside className="flex min-h-0 flex-col gap-3 border-l border-white/5 bg-black/20 p-3">
           <TurnOrder players={seatsFromMe(game)} />
