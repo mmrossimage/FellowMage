@@ -334,13 +334,22 @@ function CardPickDialog({ prompt, onPeek }: { prompt: Prompt; onPeek: () => void
   const chosen = new Set(optionIds(prompt, 'chosenTargets'));
   // numa busca no grimório o XMage manda o grimório inteiro e só as permitidas em "possibleTargets"
   const listsTargets = promptListsTargets(prompt);
+  // ordem das habilidades desencadeadas (HumanPlayer.chooseTriggeredAbility): todas as opções são habilidades
+  const triggerOrder = prompt.cards1!.length > 1 && prompt.cards1!.every((c) => c.ability);
   return (
     <>
       <Title html={prompt.message} sub={opts['secondMessage'] as string | undefined} />
+      {triggerOrder && (
+        <p className="-mt-2 mb-3 text-xs text-white/50">
+          Clique numa habilidade para colocá-la na pilha agora (resolve por último), ou use os botões abaixo dela para o
+          servidor lembrar a ordem nas próximas vezes. Para esquecer: Menu → Respostas automáticas.
+        </p>
+      )}
       <div className="grid grid-cols-[repeat(auto-fill,minmax(130px,1fr))] gap-3">
         {prompt.cards1!.map((c) => {
           const can = !listsTargets || isPromptTarget(c, prompt);
           const isChosen = !!c.selected || chosen.has(c.id);
+          if (triggerOrder) return <TriggerChoice key={c.id} card={c} />;
           return (
             <button
               key={c.id}
@@ -369,5 +378,60 @@ function CardPickDialog({ prompt, onPeek }: { prompt: Prompt; onPeek: () => void
         {!prompt.flag && <Btn onClick={() => respondBoolean(false)}>{(opts['UI.right.btn.text'] as string) || 'Concluir'}</Btn>}
       </div>
     </>
+  );
+}
+
+/**
+ * Uma habilidade no diálogo de ordem dos gatilhos, com as opções do menu de contexto do cliente oficial
+ * (GamePanel.initPopupMenuTriggerOrder / handleTriggerOrderPopupMenuEvent): "sempre primeiro" escolhe a
+ * habilidade agora; "sempre por último" só registra a regra e manda id nulo para o servidor perguntar de novo.
+ */
+function TriggerChoice({ card }: { card: Card }) {
+  const respondUUID = useStore((s) => s.respondUUID);
+  const send = useStore((s) => s.send);
+  const action = useStore((s) => s.action);
+  const setHovered = useStore((s) => s.setHovered);
+  const rule = card.rules[0] ?? '';
+  // o servidor compara com ability.getRule(nome do objeto): o texto não pode ter {this}
+  const ruleText = rule ? rule.replace(/\{this\}/g, card.sourceName ?? card.name) : undefined;
+  const remember = (kind: 'ABILITY_FIRST' | 'ABILITY_LAST' | 'NAME_FIRST' | 'NAME_LAST') => {
+    const byName = kind.startsWith('NAME');
+    if (byName && !ruleText) return;
+    action(`TRIGGER_AUTO_ORDER_${kind}`, byName ? ruleText : card.id);
+    if (kind.endsWith('FIRST')) respondUUID(card.id);
+    else {
+      useStore.setState({ waiting: false });
+      send({ t: 'sendUUID', id: null });
+    }
+  };
+  const small = 'rounded-md bg-white/5 px-1.5 py-1 text-[10px] leading-tight text-white/70 ring-1 ring-white/10 transition hover:bg-white/15 hover:text-white';
+  return (
+    <div className="flex flex-col gap-1.5">
+      <button
+        onClick={() => respondUUID(card.id)}
+        onMouseEnter={() => setHovered(card.id)}
+        onMouseLeave={() => setHovered(undefined)}
+        className="relative rounded-[6%/4.5%] transition hover:-translate-y-1"
+      >
+        <CardFace card={card} className={HIGHLIGHT_CLASS.target.replace(' animate-pulse', '')} />
+      </button>
+      {rule && (
+        <div className="line-clamp-4 text-[10px] leading-snug text-white/60" dangerouslySetInnerHTML={{ __html: rulesToHtml(rule, card.sourceName ?? card.name) }} />
+      )}
+      <div className="grid grid-cols-2 gap-1">
+        <button className={small} title="Coloca esta habilidade sempre primeiro na pilha (resolve por último)" onClick={() => remember('ABILITY_FIRST')}>
+          Sempre 1ª
+        </button>
+        <button className={small} title="Coloca esta habilidade sempre por último na pilha (resolve primeiro)" onClick={() => remember('ABILITY_LAST')}>
+          Sempre última
+        </button>
+        <button className={small} title="Todas as habilidades com este texto vão sempre primeiro na pilha" onClick={() => remember('NAME_FIRST')}>
+          Texto: 1ª
+        </button>
+        <button className={small} title="Todas as habilidades com este texto vão sempre por último na pilha" onClick={() => remember('NAME_LAST')}>
+          Texto: última
+        </button>
+      </div>
+    </div>
   );
 }

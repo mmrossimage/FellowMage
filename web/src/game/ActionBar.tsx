@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { useStore } from '../store';
 import { promptHtml } from '../i18n';
 import { cx, sanitizeHtml } from '../util';
+import { SKIPS } from './GameMenu';
 
 type Btn = { label: string; onClick: () => void; tone?: 'primary' | 'secondary' | 'danger'; hotkey?: string };
 
@@ -59,12 +60,29 @@ export function ActionBar() {
     }
   }
 
-  // atalhos de teclado: Espaço = passar/concluir, Enter = confirmar
+  const me = game?.players.find((p) => p.me);
+  const myTurn = me?.id === game?.activePlayerId;
+  // desfazer: o servidor guarda estados das próprias ações enquanto a pilha está vazia (botão Undo do cliente oficial)
+  const canUndo = waiting && (me?.statesSaved ?? 0) > 0 && !game?.stack.length;
+  // F2 só confirma (OK/Sim/Concluir/Passar), nunca cancela
+  const f2Button = buttons.find((x) => x.tone === 'primary');
+
+  // atalhos de teclado: Espaço = passar/concluir, Enter = confirmar, F2 = OK/Sim/Concluir (feedbackPanel.pressOKYesOrDone)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement)?.tagName === 'INPUT') return;
-      const key = e.code === 'Space' ? 'Space' : e.key === 'Enter' ? 'Enter' : null;
-      const b = key && buttons.find((x) => x.hotkey === key);
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        if (canUndo) {
+          e.preventDefault();
+          action('UNDO');
+        }
+        return;
+      }
+      const b =
+        e.key === 'F2'
+          ? f2Button
+          : buttons.find((x) => x.hotkey === (e.code === 'Space' ? 'Space' : e.key === 'Enter' ? 'Enter' : null));
       if (b) {
         e.preventDefault();
         b.onClick();
@@ -73,9 +91,6 @@ export function ActionBar() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   });
-
-  const me = game?.players.find((p) => p.me);
-  const myTurn = me?.id === game?.activePlayerId;
   const message = prompt?.message ?? '';
   const second = opts['secondMessage'] as string | undefined;
 
@@ -108,45 +123,66 @@ export function ActionBar() {
             )}
           >
             {b.label}
-            {b.hotkey && <span className="ml-2 text-[10px] font-normal opacity-60">{b.hotkey === 'Space' ? '␣' : '↵'}</span>}
+            {hotkeyText(b, b === f2Button) && (
+              <span className="ml-1.5 text-[10px] font-normal normal-case opacity-60">({hotkeyText(b, b === f2Button)})</span>
+            )}
           </button>
         ))}
       </div>
 
-      {/* desfazer: o servidor guarda estados das próprias ações enquanto a pilha está vazia (botão Undo do cliente oficial) */}
-      {waiting && (me?.statesSaved ?? 0) > 0 && !game?.stack.length && (
+      {canUndo && (
         <button
           onClick={() => action('UNDO')}
           className="rounded-lg bg-black/40 px-2 py-1.5 text-[11px] text-white/70 ring-1 ring-white/10 transition hover:bg-white/10 hover:text-white"
         >
-          ↶ Desfazer última ação
+          ↶ Desfazer última ação (Ctrl+Z)
         </button>
       )}
 
-      {waiting && prompt?.kind === 'select' && (
+      {/* botões de passe do cliente oficial (GamePanel: btnCancelSkip, btnSkipToNextTurn...), sempre com a tecla;
+          o F3 também cancela um passe já em andamento, então fica visível mesmo sem prioridade */}
+      {!game?.watching && (
         <div className="grid grid-cols-2 gap-1.5 text-[11px]">
-          <QuickPass
-            label={myTurn ? 'Até o fim do turno' : 'Até meu turno'}
-            title={myTurn ? 'Passa até a etapa final deste turno (F5)' : 'Passa tudo até o início do meu próximo turno (F9)'}
-            onClick={() => action(myTurn ? 'PASS_PRIORITY_UNTIL_TURN_END_STEP' : 'PASS_PRIORITY_UNTIL_MY_NEXT_TURN')}
-          />
-          {/* F11 do cliente oficial: para na etapa final do jogador anterior a mim (hora de instantâneas/flash) */}
-          <QuickPass
-            label="Etapa final antes do meu turno"
-            title="Passa tudo até a etapa final do turno do oponente que joga antes de mim (F11)"
-            onClick={() => action('PASS_PRIORITY_UNTIL_END_STEP_BEFORE_MY_NEXT_TURN')}
-          />
-          <QuickPass label="Próxima fase principal" title="Passa até a próxima fase principal (F7)" onClick={() => action('PASS_PRIORITY_UNTIL_NEXT_MAIN_PHASE')} />
-          <QuickPass label="Resolver pilha" title="Passa até a pilha resolver (F10)" onClick={() => action('PASS_PRIORITY_UNTIL_STACK_RESOLVED')} />
+          {QUICK_SKIPS.map((key) => {
+            const s = SKIPS.find((x) => x.key === key)!;
+            const enabled = key === 'F3' || (waiting && prompt?.kind === 'select');
+            const label = key === 'F5' && !myTurn ? 'Até o fim do turno atual' : s.short;
+            return (
+              <QuickPass
+                key={key}
+                label={`${label} (${key})`}
+                title={s.label}
+                disabled={!enabled}
+                highlight={key === 'F3'}
+                onClick={() => action(s.action)}
+              />
+            );
+          })}
         </div>
       )}
     </div>
   );
 }
 
-function QuickPass({ label, title, onClick }: { label: string; title?: string; onClick: () => void }) {
+function hotkeyText(b: Btn, f2: boolean): string {
+  const keys = [b.hotkey === 'Space' ? '␣' : b.hotkey === 'Enter' ? '↵' : b.hotkey, f2 ? 'F2' : undefined].filter(Boolean);
+  return keys.join(' ');
+}
+
+/** os mesmos botões de passe da barra do cliente oficial (o F6 fica só no menu e no teclado, como lá) */
+const QUICK_SKIPS = ['F3', 'F4', 'F5', 'F7', 'F9', 'F10', 'F11'];
+
+function QuickPass({ label, title, onClick, disabled, highlight }: { label: string; title?: string; onClick: () => void; disabled?: boolean; highlight?: boolean }) {
   return (
-    <button onClick={onClick} title={title} className="rounded-lg bg-black/40 px-2 py-1.5 text-white/70 ring-1 ring-white/10 transition hover:bg-white/10 hover:text-white">
+    <button
+      onClick={onClick}
+      title={title}
+      disabled={disabled}
+      className={cx(
+        'rounded-lg bg-black/40 px-2 py-1.5 ring-1 transition enabled:hover:bg-white/10 enabled:hover:text-white disabled:opacity-35',
+        highlight ? 'text-ember-200 ring-ember-400/30' : 'text-white/70 ring-white/10',
+      )}
+    >
       {label}
     </button>
   );

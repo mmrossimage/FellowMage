@@ -6,6 +6,7 @@ import mage.players.PlayableObjectsList;
 import mage.view.CardView;
 import mage.view.CardsView;
 import mage.view.CombatGroupView;
+import mage.view.AbilityView;
 import mage.view.CommandObjectView;
 import mage.view.CommanderView;
 import mage.view.CounterView;
@@ -184,7 +185,10 @@ public final class ViewMapper {
         m.put("faceDown", c.isFaceDown());
         // permanente transformado: nome e regras já são do verso, mas set/número continuam os da carta
         // (o cliente oficial baixa a imagem do verso à parte, ver ScryfallImageSource.isSecondSide)
-        m.put("transformed", c.isTransformed());
+        // MDFC jogada pelo verso (ex.: terreno) não vem "transformada", mas o set/número são os da frente:
+        // a imagem também precisa do verso (o cliente oficial guarda a imagem pelo nome da face)
+        m.put("transformed", c.isTransformed()
+                || (!c.isFaceDown() && CardCatalog.isBackFace(c.getExpansionSetCode(), c.getCardNumber(), c.getName())));
         m.put("ability", c.isAbility());
         m.put("targets", c.getTargets());
         if (c instanceof StackAbilityView) {
@@ -194,6 +198,18 @@ public final class ViewMapper {
                 m.put("set", source.getExpansionSetCode());
                 m.put("num", source.getCardNumber());
                 m.put("sourceName", source.getDisplayName());
+            }
+        } else if (c instanceof AbilityView) {
+            // habilidades desencadeadas esperando a ordem na pilha (HumanPlayer.chooseTriggeredAbility):
+            // id = id da habilidade, como o cliente oficial usa em TRIGGER_AUTO_ORDER_*
+            AbilityView a = (AbilityView) c;
+            m.put("ability", true);
+            CardView source = a.getSourceCard();
+            if (source != null) {
+                // nome do objeto de origem: o servidor compara o texto com ability.getRule(object.getName())
+                m.put("sourceName", source.getName());
+                m.put("set", source.getExpansionSetCode());
+                m.put("num", source.getCardNumber());
             }
         }
         if (playable != null && playable.containsObject(c.getId())) {

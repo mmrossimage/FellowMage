@@ -135,7 +135,8 @@ export function LogPanel() {
           <input
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="Mensagem para a mesa…"
+            data-game-chat
+            placeholder="Mensagem para a mesa… (F12)"
             className="input py-1.5 text-xs"
             maxLength={500}
           />
