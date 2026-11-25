@@ -64,13 +64,37 @@ const SYMBOL = /^[0-9WUBRGCSXYZTQEPH½∞]+$/i;
 export function rulesToHtml(rule: string, cardName?: string): string {
   // o XMage manda "&bull" (sem ";") antes de cada modo de "Choose one —"
   const decoded = rule.replace(/&bull;?/g, '•');
-  return sanitizeHtml(decoded).replace(/\{([^}]+)\}/g, (whole, s: string) => {
+  return replaceHintIcons(sanitizeHtml(decoded)).replace(/\{([^}]+)\}/g, (whole, s: string) => {
     if (s === 'this' || s === 'source') return cardName ? escapeHtml(cardName) : 'esta carta';
     const code = s.replace('/', '').toUpperCase();
     if (!SYMBOL.test(code)) return whole;
     return `<img src="${symbolUrl(code)}" alt="{${s}}" class="inline h-[1em] w-[1em] align-[-0.12em] mx-[1px]" />`;
   });
 }
+
+/**
+ * Marcadores das dicas de cartas (HintUtils.HINT_ICON_*: "ICON_GOOD", "ICON_BAD"...). O cliente oficial os troca
+ * por imagens em ManaSymbols.replaceSymbolsWithHTML (resources/hint/good.png, bad.png...); aqui viram selos coloridos.
+ */
+const HINT_ICONS: Record<string, { char: string; bg: string; title: string }> = {
+  ICON_DUNGEON_ROOM_CURRENT: { char: '▶', bg: '#16a34a', title: 'Sala atual' },
+  ICON_DUNGEON_ROOM_NEXT: { char: '↘', bg: '#ca8a04', title: 'Próxima sala' },
+  ICON_RESTRICT: { char: '⊘', bg: '#ea580c', title: 'Restrição' },
+  ICON_REQUIRE: { char: '!', bg: '#ca8a04', title: 'Obrigação' },
+  ICON_GOOD: { char: '✓', bg: '#16a34a', title: 'Condição cumprida' },
+  ICON_BAD: { char: '✕', bg: '#dc2626', title: 'Condição não cumprida' },
+};
+const HINT_ICON_RE = new RegExp(Object.keys(HINT_ICONS).join('|'), 'g');
+
+export function replaceHintIcons(html: string): string {
+  return html.replace(HINT_ICON_RE, (key) => {
+    const i = HINT_ICONS[key];
+    return `<span title="${i.title}" style="background:${i.bg}" class="mr-1 inline-flex h-[1.15em] w-[1.15em] items-center justify-center rounded-full align-[-0.2em] text-[0.8em] font-bold leading-none text-white">${i.char}</span>`;
+  });
+}
+
+/** Remove os marcadores de dica (para textos curtos, sem HTML). */
+export const stripHintIcons = (s: string) => s.replace(HINT_ICON_RE, '');
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');

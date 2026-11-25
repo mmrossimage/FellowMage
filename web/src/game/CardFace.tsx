@@ -1,7 +1,7 @@
 import { memo, useState } from 'react';
 import type { Card } from '../types';
 import { cardImageUrls, colorAccent, type ImageSize } from '../cardImage';
-import { cx, manaSymbols, symbolUrl } from '../util';
+import { cx, manaSymbols, stripHintIcons, symbolUrl } from '../util';
 
 type Props = {
   card: Card;
@@ -77,7 +77,7 @@ function DrawnFrame({ card }: { card: Card }) {
       <div className="truncate rounded-sm bg-white/70 px-1 py-[1px] text-[0.9em] leading-tight">{card.type}</div>
       <div className="mt-[3%] h-[28%] overflow-hidden rounded-sm bg-white/60 px-1 py-[2px] text-[0.85em] leading-snug">
         {card.rules.slice(0, 3).map((r, i) => (
-          <p key={i} className="truncate" dangerouslySetInnerHTML={{ __html: r.replace(/<[^>]+>/g, '') }} />
+          <p key={i} className="truncate" dangerouslySetInnerHTML={{ __html: stripHintIcons(r.replace(/<[^>]+>/g, '')) }} />
         ))}
       </div>
     </div>
